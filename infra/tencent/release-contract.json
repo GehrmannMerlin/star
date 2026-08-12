@@ -1,0 +1,30 @@
+{
+  "appRoot": "/opt/stellaris-zhengwujianli",
+  "repository": "/opt/stellaris-zhengwujianli/repository",
+  "branch": "tencent/zhengwujianli",
+  "productionProject": "stellaris-zhengwujianli",
+  "candidateProject": "stellaris-zhengwujianli-candidate",
+  "productionPorts": [3217, 3218],
+  "candidatePorts": [3227, 3228],
+  "productionDatabase": "stellaris",
+  "candidateDatabase": "stellaris_candidate",
+  "allowedContainerPrefixes": [
+    "stellaris-zhengwujianli-",
+    "stellaris-zhengwujianli-candidate-"
+  ],
+  "forbiddenPathFragments": [
+    "/www/wwwroot/auth-system",
+    "/www/server/panel/data",
+    "/www/backup/database"
+  ],
+  "forbiddenDatabaseNames": [
+    "employees",
+    "employee",
+    "auth",
+    "auth_system"
+  ],
+  "productionCompose": "infra/tencent/compose.yml",
+  "candidateCompose": "infra/tencent/compose.candidate.yml",
+  "stateDirectory": "/opt/stellaris-zhengwujianli/state",
+  "candidateDataDirectory": "/opt/stellaris-zhengwujianli/candidate-data"
+}
