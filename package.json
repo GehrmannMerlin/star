@@ -13,7 +13,8 @@
     "dev": "pnpm --filter @stellaris/backend dev",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "verify:official-skill": "node scripts/verify-official-biography-skill.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
