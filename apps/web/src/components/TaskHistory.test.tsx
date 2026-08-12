@@ -40,6 +40,16 @@ function makeApi(overrides: Partial<ApiClient> = {}): ApiClient {
 }
 
 describe("TaskHistory", () => {
+  it("loads an empty history once and shows the empty state", async () => {
+    const listTasks = vi.fn(async () => ({ tasks: [], total: 0 }));
+    const api = makeApi({ listTasks });
+
+    render(<TaskHistory api={api} onOpen={vi.fn()} />);
+
+    expect(await screen.findByText("暂无任务记录")).toBeInTheDocument();
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(1));
+  });
+
   it("使用 API 返回任务渲染 table card 并保持筛选逻辑", async () => {
     const user = userEvent.setup();
     const api = makeApi();

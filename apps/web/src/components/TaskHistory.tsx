@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { TaskRunSummary } from "@stellaris/contracts";
 import type { ApiClient } from "../app.js";
 
@@ -48,10 +48,10 @@ export function TaskHistory({
     }
   };
 
-  // 首次渲染加载。
-  if (tasks.length === 0 && !loading && offset === 0 && !error) {
+  // Load once after mount. Rendering an empty result must not trigger another request.
+  useEffect(() => {
     void load(0, "", "");
-  }
+  }, []);
 
   const pageCount = Math.ceil(total / PAGE_SIZE);
   const page = Math.floor(offset / PAGE_SIZE) + 1;
