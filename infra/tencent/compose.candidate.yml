@@ -1,17 +1,17 @@
-name: stellaris-zhengwujianli
+name: stellaris-zhengwujianli-candidate
 
 services:
   db:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_DB: stellaris
-      POSTGRES_USER: stellaris
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-replace-before-deploy}
+      POSTGRES_DB: stellaris_candidate
+      POSTGRES_USER: stellaris_candidate
+      POSTGRES_PASSWORD: ${CANDIDATE_POSTGRES_PASSWORD:?set CANDIDATE_POSTGRES_PASSWORD}
     volumes:
-      - /opt/stellaris-zhengwujianli/data/postgres:/var/lib/postgresql/data
+      - /opt/stellaris-zhengwujianli/candidate-data/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U stellaris -d stellaris"]
+      test: ["CMD-SHELL", "pg_isready -U stellaris_candidate -d stellaris_candidate"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -29,18 +29,18 @@ services:
       PORT: "3000"
       PGHOST: db
       PGPORT: "5432"
-      PGDATABASE: stellaris
-      PGUSER: stellaris
-      PGPASSWORD: ${POSTGRES_PASSWORD:-replace-before-deploy}
-      STELLARIS_EVIDENCE_ROOT: /data/evidence
-      STELLARIS_EXPORT_ROOT: /data/exports
-      STELLARIS_WORKER: "1"
+      PGDATABASE: stellaris_candidate
+      PGUSER: stellaris_candidate
+      PGPASSWORD: ${CANDIDATE_POSTGRES_PASSWORD:?set CANDIDATE_POSTGRES_PASSWORD}
+      STELLARIS_EVIDENCE_ROOT: /candidate-data/evidence
+      STELLARIS_EXPORT_ROOT: /candidate-data/exports
+      STELLARIS_WORKER: "0"
       PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
     volumes:
-      - /opt/stellaris-zhengwujianli/data/evidence:/data/evidence
-      - /opt/stellaris-zhengwujianli/data/exports:/data/exports
+      - /opt/stellaris-zhengwujianli/candidate-data/evidence:/candidate-data/evidence
+      - /opt/stellaris-zhengwujianli/candidate-data/exports:/candidate-data/exports
     ports:
-      - "127.0.0.1:3217:3000"
+      - "127.0.0.1:3227:3000"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
       interval: 15s
@@ -55,8 +55,10 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    volumes:
+      - /opt/stellaris-zhengwujianli/repository/infra/tencent/nginx-candidate-web.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "127.0.0.1:3218:80"
+      - "127.0.0.1:3228:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/zhengwujianli/ || exit 1"]
       interval: 15s

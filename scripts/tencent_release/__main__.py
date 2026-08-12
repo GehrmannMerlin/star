@@ -3,12 +3,35 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict, is_dataclass
 import json
+import os
 from pathlib import Path
+import re
 
 from .bootstrap import bootstrap
+from .build import build_images
+from .candidate import candidate_up, candidate_verify
 from .contract import load_contract
-from .preflight import preflight
+from .preflight import preflight, require_clean_synced_repository
+
+
+def _activate_node_24() -> None:
+    root = Path("/root/.nvm/versions/node")
+    candidates: list[tuple[tuple[int, ...], Path]] = []
+    for path in root.glob("v24.*/bin"):
+        match = re.fullmatch(r"v(\d+(?:\.\d+)+)", path.parent.name)
+        if match:
+            candidates.append(
+                (tuple(int(part) for part in match.group(1).split(".")), path)
+            )
+    if candidates:
+        node_bin = max(candidates)[1]
+        os.environ["PATH"] = f"{node_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+
+
+def _serializable(value: object) -> object:
+    return asdict(value) if is_dataclass(value) else value
 
 
 def main() -> int:
@@ -17,14 +40,34 @@ def main() -> int:
     subparsers.add_parser("bootstrap")
     preflight_parser = subparsers.add_parser("preflight")
     preflight_parser.add_argument("--dry-run", action="store_true")
+    subparsers.add_parser("build")
+    subparsers.add_parser("candidate-up")
+    subparsers.add_parser("candidate-verify")
     arguments = parser.parse_args()
 
+    _activate_node_24()
     contract = load_contract(Path("infra/tencent/release-contract.json"))
     if arguments.command == "bootstrap":
         result = bootstrap(contract)
-    else:
+    elif arguments.command == "preflight":
         result = preflight(contract, dry_run=arguments.dry_run)
-    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    elif arguments.command == "build":
+        result = build_images(contract)
+    elif arguments.command == "candidate-up":
+        result = candidate_up(
+            contract,
+            require_clean_synced_repository(contract),
+        )
+    else:
+        result = candidate_verify(contract)
+    print(
+        json.dumps(
+            _serializable(result),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0
 
 
