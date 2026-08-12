@@ -1,0 +1,35 @@
+{
+  "name": "@stellaris/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing/pg.js": {
+      "types": "./dist/testing/pg.d.ts",
+      "default": "./dist/testing/pg.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@stellaris/contracts": "workspace:*",
+    "kysely": "0.29.4",
+    "pg": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.2",
+    "@types/pg": "8.20.3",
+    "testcontainers": "12.0.4",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

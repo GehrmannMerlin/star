@@ -1,0 +1,32 @@
+Tencent independent deployment fast-track checkpoint
+Date: 2026-08-11 (Asia/Shanghai)
+Release: /opt/stellaris-zhengwujianli/releases/20260811T094203Z
+
+Task 5:
+- Build status: 0
+- Build log: /opt/stellaris-zhengwujianli/build-20260811T094203Z-system-chromium.log
+- Dockerfile SHA-256: 15521b88df213f433c2161b66fa154792c0497e47fb4df4c2587868dc0b4ecf5
+- Compose SHA-256: 998a755afe224b0967eb771c5889099e951cf33d0e66665f391c1993e8b7fed0
+- render.ts SHA-256: 3107802485ccac1cb910d35c8984fed3839b26a6d35453195c728bd691a9882b
+- Database image fast-track deviation: postgres:17 (PG 17.10, pre-existing local image)
+- Containers: db/backend/web healthy, restart count 0
+- Bindings: 127.0.0.1:3217 and 127.0.0.1:3218; DB unbound
+- task_run count: 0
+- owner_user_id nullable: NO
+- System Chromium smoke: 151.0.7922.108, launch/version/close passed
+
+Task 6:
+- Nginx active SHA-256: 86b4a18801a68ea7893bc8fe9934a362d64af7a36514ca54659394332e8810f7
+- Pre-cutover backup: /www/server/panel/vhost/nginx/tongjixinzhi.cn.conf.bak-stellaris-20260811T223500Z
+- Pre-login-redirect backup: /www/server/panel/vhost/nginx/tongjixinzhi.cn.conf.bak-pre-login-redirect-20260811T224000Z
+- nginx -t: syntax is ok; test is successful
+- reload: exit 0
+- Unauthenticated page: 302 to /auth/
+- Unauthenticated API: 401
+- Authenticated page: 200
+- Two-account list isolation: passed
+- Cross-account task access: 404 / 404
+- Temporary smoke rows removed; final task_run count: 0
+- Homer zhengwujianli card count: 1
+- Other project checks: /satmap/ 200; /kdocs-sync/ 200
+- Ali origin read-only check: 200

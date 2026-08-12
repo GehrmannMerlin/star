@@ -1,0 +1,72 @@
+Task 02: database task ownership boundary
+Date: 2026-08-11
+
+RED
+Command: pnpm --filter @stellaris/db exec vitest run src/task-owner.test.ts
+Exit code: 1
+Relevant output:
+  FAIL  src/task-owner.test.ts > task ownership boundary > isolates idempotency, lookup, listing, and counts by owner
+  AssertionError: expected 'bd8402f3-9472-499f-9991-c7d7596d68e2' not to be 'bd8402f3-9472-499f-9991-c7d7596d68e2'
+  Test Files  1 failed (1)
+  Tests       1 failed (1)
+
+FOCUSED GREEN
+Command: pnpm --filter @stellaris/db exec vitest run src/task-owner.test.ts
+Exit code: 0
+Relevant output:
+  Test Files  1 passed (1)
+  Tests       1 passed (1)
+  Duration    13.87s
+
+FULL DATABASE TESTS
+Command: pnpm --filter @stellaris/db test
+Exit code: 0
+Relevant output:
+  Test Files  8 passed (8)
+  Tests       18 passed (18)
+  Duration    34.98s
+
+DATABASE TYPECHECK
+Command: pnpm --filter @stellaris/db typecheck
+Exit code: 0
+Relevant output:
+  > tsc -p tsconfig.json --noEmit
+
+FIX ROUND 1: DOWNGRADE WITH DUPLICATE OWNER-SCOPED KEYS
+
+RED
+Command: pnpm --filter @stellaris/db exec vitest run src/task-owner.test.ts
+Exit code: 1
+Relevant output:
+  FAIL  src/task-owner.test.ts > task ownership boundary > preserves duplicate owner-scoped tasks when migration 003 is downgraded
+  error: could not create unique index "task_run_idempotency_key_unique"
+  Test Files  1 failed (1)
+  Tests       1 failed | 1 passed (2)
+  Duration    15.96s
+
+FOCUSED GREEN
+Command: pnpm --filter @stellaris/db exec vitest run src/task-owner.test.ts
+Exit code: 0
+Relevant output:
+  Test Files  1 passed (1)
+  Tests       2 passed (2)
+  Duration    17.40s
+
+FULL DATABASE TESTS
+Command: pnpm --filter @stellaris/db test
+Exit code: 0
+Relevant output:
+  Test Files  8 passed (8)
+  Tests       19 passed (19)
+  Duration    33.34s
+
+DATABASE TYPECHECK
+Command: pnpm --filter @stellaris/db typecheck
+Exit code: 0
+Relevant output:
+  > tsc -p tsconfig.json --noEmit
+
+Explicit downgrade semantics:
+  Every idempotency key is rewritten as <task UUID>:<original key> before
+  restoring global uniqueness. Both task rows are preserved, but a legacy
+  client retrying the original key after explicit downgrade creates a new task.

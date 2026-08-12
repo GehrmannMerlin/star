@@ -1,0 +1,128 @@
+import { Type, type Static } from "@sinclair/typebox";
+import {
+  TaskRunStatus,
+  TaskMode,
+  ExpandLevel,
+  InstitutionType,
+} from "./enums.js";
+
+/**
+ * 任务边界合同（第一闭环收敛子集，规格 §4.1 / §6.1 / §18.3）。
+ * 指定机构或人员模式：一个行政区 + 一个机构，人员可选（只缩小目标，不跳过准入/Reviewer）。
+ */
+
+/** 创建任务请求。 */
+export const CreateTaskRequest = Type.Object({
+  clientIdempotencyKey: Type.String({ minLength: 8, maxLength: 128 }),
+  /** 任务模式：TARGETED（默认，指定单机构）或 FULL_INSTITUTION（完整机构模式）。 */
+  mode: Type.Optional(Type.Enum(TaskMode)),
+  /** 行政区划代码（文本，保留前导零，规格 §8.1）。 */
+  regionCode: Type.String({ minLength: 6, maxLength: 16 }),
+  regionName: Type.String({ minLength: 1, maxLength: 128 }),
+  /** 指定机构模式必填；完整机构模式由机构发现自动产生，可省略。 */
+  institutionName: Type.Optional(Type.String({ minLength: 1, maxLength: 255 })),
+  /** 可选：只缩小目标，不跳过完整领导结构/URL 准入/Reviewer。 */
+  personName: Type.Optional(Type.String({ maxLength: 128 })),
+  officialEntryUrl: Type.Optional(Type.String({ maxLength: 2048 })),
+  institutionType: Type.Optional(Type.Enum(InstitutionType)),
+  /** 多行政区代码清单（FULL_INSTITUTION 模式可选；TARGETED 忽略）。 */
+  regionCodes: Type.Optional(Type.Array(Type.String({ minLength: 6, maxLength: 16 }))),
+  /** 展开层级（FULL_INSTITUTION 模式；默认 COUNTY，可选 TOWN_STREET）。 */
+  expandLevel: Type.Optional(Type.Enum(ExpandLevel)),
+  ruleVersion: Type.String({ minLength: 1, maxLength: 64 }),
+});
+export type CreateTaskRequest = Static<typeof CreateTaskRequest>;
+
+/** 任务摘要（用户可见中文状态 + 真实计数）。 */
+export const TaskRunSummary = Type.Object({
+  id: Type.String(),
+  status: Type.Enum(TaskRunStatus),
+  statusZh: Type.String(),
+  mode: Type.Enum(TaskMode),
+  expandLevel: Type.Enum(ExpandLevel),
+  ruleVersion: Type.String(),
+  totalInstitutions: Type.Number(),
+  processedInstitutions: Type.Number(),
+  reviewedSlots: Type.Number(),
+  recoveryCount: Type.Number(),
+  blockedCount: Type.Number(),
+  requestedAt: Type.String(),
+  startedAt: Type.Optional(Type.String()),
+  finishedAt: Type.Optional(Type.String()),
+  errorMessage: Type.Optional(Type.String()),
+  /** 是否可执行暂停/取消等控制操作（非终态，规格 §19.1）。 */
+  controlable: Type.Boolean(),
+});
+export type TaskRunSummary = Static<typeof TaskRunSummary>;
+
+/** 任务控制响应（暂停/继续/取消/复制，规格 §19.1）。 */
+export const TaskControlResponse = Type.Object({
+  ok: Type.Boolean(),
+  task: Type.Optional(TaskRunSummary),
+  newTaskId: Type.Optional(Type.String()),
+  error: Type.Optional(Type.String()),
+});
+export type TaskControlResponse = Static<typeof TaskControlResponse>;
+
+/** 创建任务响应：created=首次创建，replayed=命中既有幂等键。 */
+export const CreateTaskResponse = Type.Object({
+  task: TaskRunSummary,
+  idempotencyResult: Type.Union([
+    Type.Literal("created"),
+    Type.Literal("replayed"),
+  ]),
+});
+export type CreateTaskResponse = Static<typeof CreateTaskResponse>;
+
+/** 任务列表查询参数（P3：GET /api/tasks 分页/筛选）。 */
+export const TaskListParams = Type.Object({
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
+  offset: Type.Optional(Type.Integer({ minimum: 0 })),
+  status: Type.Optional(Type.Enum(TaskRunStatus)),
+  mode: Type.Optional(Type.Enum(TaskMode)),
+});
+export type TaskListParams = Static<typeof TaskListParams>;
+
+/** 任务列表响应（P3：最近任务摘要数组 + 总数）。 */
+export const TaskListResponse = Type.Object({
+  tasks: Type.Array(TaskRunSummary),
+  total: Type.Number(),
+});
+export type TaskListResponse = Static<typeof TaskListResponse>;
+
+/** 冻结行政区范围快照（规格 §16.1）。 */
+export const TargetScopeView = Type.Object({
+  id: Type.String(),
+  taskRunId: Type.String(),
+  regionCode: Type.String(),
+  regionName: Type.String(),
+  parentRegionCode: Type.Optional(Type.String()),
+  regionLevel: Type.String(),
+  included: Type.Boolean(),
+});
+export type TargetScopeView = Static<typeof TargetScopeView>;
+
+/** 冻结机构快照（规格 §16.1 / §8.2，失败时保留终态）。 */
+export const InstitutionSnapshotView = Type.Object({
+  id: Type.String(),
+  taskRunId: Type.String(),
+  regionCode: Type.String(),
+  officialName: Type.String(),
+  commonName: Type.Optional(Type.String()),
+  institutionType: Type.Enum(InstitutionType),
+  officialEntryUrl: Type.Optional(Type.String()),
+  discoverySource: Type.String(),
+  selectTwoPrimary: Type.Boolean(),
+  frozenAt: Type.String(),
+  status: Type.String(),
+  terminalReason: Type.Optional(Type.String()),
+});
+export type InstitutionSnapshotView = Static<typeof InstitutionSnapshotView>;
+
+/** 任务详情（含冻结范围 + 单一机构快照）。 */
+export const TaskDetail = Type.Object({
+  task: TaskRunSummary,
+  scopes: Type.Array(TargetScopeView),
+  institution: InstitutionSnapshotView,
+});
+export type TaskDetail = Static<typeof TaskDetail>;

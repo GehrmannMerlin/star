@@ -1,0 +1,16 @@
+node_modules/
+**/dist/
+**/.tmp-evidence*/
+.remote-audit/
+third-party/
+skills/
+*.tsbuildinfo
+*.tar
+*.log
+.env
+.env.*
+!.env.example
+config.local.json
+__pycache__/
+*.pyc
+

@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: stellaris-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stellaris
+      POSTGRES_PASSWORD: stellaris_dev
+      POSTGRES_DB: stellaris
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - stellaris_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stellaris -d stellaris"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  stellaris_pgdata:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: E:\StellarisData\postgres

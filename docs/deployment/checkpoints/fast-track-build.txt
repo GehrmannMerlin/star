@@ -1,0 +1,22 @@
+Fast-track Tencent independent-deployment checkpoint
+Timestamp: 2026-08-11 17:25:07 +08:00
+
+Production build:
+- Command: VITE_PUBLIC_BASE=/zhengwujianli/ pnpm build
+- Initial result: failed (TypeScript test fixture missing required task_run.owner_user_id).
+- Direct build fix: added owner_user_id: "test-user" to packages/rules/src/reviewer.test.ts, matching the post-migration schema and existing fixtures.
+- Final result: passed (exit 0). No full test suite was run.
+
+Secret scan:
+- Scope: source/configuration text files under apps, packages, config, infra, and tests, plus root deployment/package files.
+- Exclusions: node_modules, dist, .env*, logs, archives.
+- Result: 247 text files scanned; 0 matches for SSH password/passphrase, employee/user password, session secret/key, production database password, or private-key material patterns.
+
+Archive:
+- Deployable path: E:\stellaris-zhengwujianli-20260811-173327.tar
+- Explicit inputs: Dockerfile, .dockerignore, .npmrc, package.json, pnpm lock/workspace files, tsconfig.base.json, apps, packages, config, infra, tests, docs.
+- Exclusions verified: third-party, top-level skills, node_modules, dist, .env*, logs, archives, and tar archives.
+- Size: 6,841,856 bytes
+- SHA-256: 496D95F68244C8458AF67E27F1FBE9CC93045A8401652A9D9299B24497CA1B3B
+- Validation: 514 entries; all required entries present; 0 excluded-entry violations.
+- Retained, do not upload: E:\stellaris-zhengwujianli-20260811-172507.tar (2,468,628,480 bytes). It was created from a broad root input and includes third-party vendored repositories.

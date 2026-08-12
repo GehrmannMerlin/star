@@ -1,0 +1,76 @@
+name: stellaris-zhengwujianli
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stellaris
+      POSTGRES_USER: stellaris
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-replace-before-deploy}
+    volumes:
+      - /opt/stellaris-zhengwujianli/data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stellaris -d stellaris"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    mem_limit: 512m
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: backend
+      args:
+        VITE_PUBLIC_BASE: /zhengwujianli/
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: stellaris
+      PGUSER: stellaris
+      PGPASSWORD: ${POSTGRES_PASSWORD:-replace-before-deploy}
+      STELLARIS_EVIDENCE_ROOT: /data/evidence
+      STELLARIS_EXPORT_ROOT: /data/exports
+      STELLARIS_WORKER: "1"
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
+    volumes:
+      - /opt/stellaris-zhengwujianli/data/evidence:/data/evidence
+      - /opt/stellaris-zhengwujianli/data/exports:/data/exports
+    ports:
+      - "127.0.0.1:3217:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    mem_limit: 1536m
+
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: web
+      args:
+        VITE_PUBLIC_BASE: /zhengwujianli/
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3218:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/zhengwujianli/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    mem_limit: 128m

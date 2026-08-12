@@ -1,0 +1,41 @@
+Tencent Stellaris re-authentication hand-off repair
+Date: 2026-08-12 (Asia/Shanghai)
+
+Observed problem:
+- Homer card URL was already /zhengwujianli/.
+- Tencent Nginx already routed the page and API to 127.0.0.1:3218 and 127.0.0.1:3217.
+- The three independent Compose services were healthy.
+- A browser without the dedicated Stellaris cookie was redirected to /auth/, which served the employee-management panel.
+- Existing Homer localStorage login state did not create the dedicated HttpOnly Stellaris cookie.
+
+Root cause:
+- The Nginx 401 page redirect lost the intended application return path.
+- Homer did not honor the existing reauth=1 contract, so a secure password re-login and cookie hand-off could not occur.
+
+Changes:
+- Nginx now redirects an unauthenticated page request to /?redirect=%2Fzhengwujianli%2F&reauth=1.
+- Homer now keeps the login overlay active whenever reauth=1 is present, even if an older localStorage portal session exists.
+- A successful existing verify-login request sets the dedicated HttpOnly cookie and returns to /zhengwujianli/.
+- No authentication-service source, employee database, employee row, or employee-management API was changed.
+
+Remote backups:
+- /www/wwwroot/homer/index.html.bak-reauth-20260812T015021Z
+- /www/server/panel/vhost/nginx/tongjixinzhi.cn.conf.bak-reauth-20260812T015021Z
+
+Verification:
+- Local Tencent deployment config tests: 2/2 passed.
+- Focused Web authentication test: 1/1 passed.
+- Homer classic script blocks: 4/4 compiled.
+- Nginx syntax and configuration test: passed.
+- Public unauthenticated page: 302 to the re-authentication URL with the encoded return path.
+- Fresh-browser check: IFC login overlay visible; employee-management panel absent.
+- Public unauthenticated API: 401.
+- Local Web /zhengwujianli/: 200, title 政务简历采集.
+- Local backend /health: 200.
+- db/backend/web: healthy, restart count 0.
+- Bindings: 127.0.0.1:3217 and 127.0.0.1:3218.
+- Independent task_run count: 0; owner_user_id remains NOT NULL.
+- Homer card count: 1; URL remains /zhengwujianli/.
+- Alibaba Cloud origin: 200.
+- Tencent /satmap/ and /kdocs-sync/: 200.
+- Employee data paths touched: 0.
