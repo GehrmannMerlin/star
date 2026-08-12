@@ -15,6 +15,8 @@ from .build import build_images
 from .candidate import candidate_up, candidate_verify
 from .contract import load_contract
 from .preflight import preflight, require_clean_synced_repository
+from .promote import promote, run_regression
+from .rollback import rollback
 
 
 def _activate_node_24() -> None:
@@ -46,6 +48,9 @@ def main() -> int:
     subparsers.add_parser("candidate-verify")
     subparsers.add_parser("backup")
     subparsers.add_parser("restore-verify")
+    subparsers.add_parser("promote")
+    subparsers.add_parser("regression")
+    subparsers.add_parser("rollback")
     arguments = parser.parse_args()
 
     _activate_node_24()
@@ -65,8 +70,14 @@ def main() -> int:
         result = candidate_verify(contract)
     elif arguments.command == "backup":
         result = backup_production_database(contract)
-    else:
+    elif arguments.command == "restore-verify":
         result = verify_backup_in_candidate(contract)
+    elif arguments.command == "promote":
+        result = promote(contract)
+    elif arguments.command == "regression":
+        result = run_regression(contract)
+    else:
+        result = rollback(contract)
     print(
         json.dumps(
             _serializable(result),

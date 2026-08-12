@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import json
 import os
@@ -20,6 +21,14 @@ from scripts.tencent_release.candidate import (
     require_unchanged_production,
 )
 from scripts.tencent_release.contract import load_contract
+from scripts.tencent_release.promote import (
+    _STATE_FORMAT,
+    promote,
+    promotion_compose_command,
+    production_asset_url,
+    validate_candidate_report,
+)
+from scripts.tencent_release.rollback import validate_rollback_manifest
 from scripts.tencent_release.preflight import (
     preflight,
     require_clean_synced_repository,
@@ -372,4 +381,119 @@ class BackupTest(unittest.TestCase):
             verify_backup_in_candidate(
                 CONTRACT,
                 target_container="stellaris-zhengwujianli-db-1",
+            )
+
+
+class PromotionTest(unittest.TestCase):
+    COMMIT = "7ecbb8daa8c51b53d13fca03488c658047ff4967"
+
+    def test_promote_requires_matching_candidate_report(self) -> None:
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "candidate report does not match commit",
+        ):
+            validate_candidate_report(
+                self.COMMIT,
+                {"commit": "0" * 40, "production_unchanged": True},
+            )
+
+    def test_production_direct_asset_url_strips_public_prefix(self) -> None:
+        self.assertEqual(
+            production_asset_url("/zhengwujianli/assets/app.js"),
+            "http://127.0.0.1:3218/assets/app.js",
+        )
+
+    def test_promotion_command_updates_only_backend_and_web(self) -> None:
+        command = promotion_compose_command(
+            CONTRACT,
+            Path("/opt/stellaris-zhengwujianli/.env"),
+            Path("/opt/stellaris-zhengwujianli/state/manifests/production-images.env"),
+        )
+        self.assertEqual(command[-2:], ["backend", "web"])
+        self.assertIn("--no-build", command)
+        self.assertEqual(command[command.index("--pull") + 1], "never")
+        self.assertNotIn("down", command)
+        self.assertNotIn("db", command[-2:])
+
+    def test_rollback_refuses_manifest_for_another_project(self) -> None:
+        with self.assertRaisesRegex(ValueError, "manifest project mismatch"):
+            validate_rollback_manifest(CONTRACT, {"project": "auth-system"})
+
+    def test_failed_regression_triggers_rollback_with_previous_images(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            app_root = Path(temporary)
+            repository = app_root / "repository"
+            compose = repository / "infra/tencent/compose.yml"
+            compose.parent.mkdir(parents=True)
+            compose.write_text("name: stellaris-zhengwujianli\n", encoding="utf-8")
+            contract = replace(
+                CONTRACT,
+                app_root=app_root,
+                repository=repository,
+                state_directory=app_root / "state",
+                candidate_data_directory=app_root / "candidate-data",
+            )
+            responses = {
+                ("git", "status", "--porcelain"): "",
+                ("git", "branch", "--show-current"): "tencent/zhengwujianli\n",
+                ("git", "rev-parse", "HEAD"): self.COMMIT + "\n",
+                ("git", "rev-parse", "origin/tencent/zhengwujianli"): self.COMMIT + "\n",
+                ("fuser", "3003/tcp"): "71718\n",
+            }
+            previous = {
+                "db": "postgres:17",
+                "backend": "stellaris-zhengwujianli-backend:oldsha",
+                "web": "stellaris-zhengwujianli-web:oldsha",
+            }
+            for service, image in previous.items():
+                name = f"stellaris-zhengwujianli-{service}-1"
+                responses[(
+                    "docker", "inspect", "--format", _STATE_FORMAT, name
+                )] = (
+                    f"{service}-id|{image}|{service}-image-id|0|running|healthy|"
+                    "stellaris-zhengwujianli\n"
+                )
+            runner = FakeRunner(responses)
+            rollback_manifests: list[dict[str, object]] = []
+
+            def fail_regression(*args: object, **kwargs: object) -> dict[str, object]:
+                raise RuntimeError("production-health")
+
+            def record_rollback(
+                target_contract: object,
+                *,
+                manifest: dict[str, object],
+                runner: object,
+            ) -> None:
+                rollback_manifests.append(manifest)
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "promotion failed and rollback completed",
+            ):
+                promote(
+                    contract,
+                    runner=runner,
+                    candidate_report={
+                        "commit": self.COMMIT,
+                        "production_unchanged": True,
+                        "health": "ok",
+                        "session_subject": "phase0-canary-subject",
+                    },
+                    backup_manifest={
+                        "sha256": "a" * 64,
+                        "database": "stellaris",
+                    },
+                    regression_fn=fail_regression,
+                    rollback_fn=record_rollback,
+                    regression_timeout=0,
+                )
+            self.assertEqual(len(rollback_manifests), 1)
+            self.assertEqual(
+                rollback_manifests[0]["previous_backend_image"],
+                previous["backend"],
+            )
+            self.assertEqual(
+                rollback_manifests[0]["previous_web_image"],
+                previous["web"],
             )
