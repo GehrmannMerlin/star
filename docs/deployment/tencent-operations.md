@@ -1,5 +1,7 @@
 # 腾讯云独立部署运维说明
 
+> **历史部署记录**：本文件描述 2026-08-11 快速部署。当前命令以 [`../operations/tencent-development-and-release.md`](../operations/tencent-development-and-release.md) 为准。
+
 ## 当前部署
 
 - 发布目录：`/opt/stellaris-zhengwujianli/releases/20260811T094203Z`

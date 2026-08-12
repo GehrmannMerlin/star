@@ -1,7 +1,9 @@
 # 爬虫系统开发进度总账
 
+> **历史开发记录**：本文不代表腾讯云当前生产状态。唯一事实来源：[`tencent-production-recovery-progress.md`](./tencent-production-recovery-progress.md)。
+
 > 最后更新：2026-08-09
-> 当前阶段：**项目收尾完成（R-69）——P1~P6 全部规划模块完成并部署；§30 验收清单核对；交接文档已生成**
+> 历史阶段记录：R-69 当时记为开发收尾；当前腾讯生产状态请查唯一恢复总账
 > 规划角色：Claude Code
 > 执行角色：Claude Code
 > 批准与最终审阅：用户
