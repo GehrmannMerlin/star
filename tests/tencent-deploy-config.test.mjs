@@ -21,7 +21,8 @@ test("Tencent Compose keeps services local, durable, and resource-bounded", asyn
 test("Nginx protects page and API routes and forwards only verified API identity", async () => {
   const nginx = await read("infra/tencent/nginx-route.conf");
   assert.doesNotMatch(nginx, /stellaris\.ac\.cn/);
-  assert.match(nginx, /127\.0\.0\.1:3218/);
+  assert.match(nginx, /proxy_pass http:\/\/127\.0\.0\.1:3218\/;/);
+  assert.doesNotMatch(nginx, /proxy_pass http:\/\/127\.0\.0\.1:3218;/);
   assert.match(nginx, /127\.0\.0\.1:3217\/api\//);
   assert.match(nginx, /127\.0\.0\.1:3003\/api\/stellaris-session\/verify/);
   assert.equal((nginx.match(/auth_request \/_stellaris_session_verify;/g) ?? []).length, 2);

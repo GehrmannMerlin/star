@@ -1,0 +1,36 @@
+Tencent Stellaris subpath asset proxy repair
+Date: 2026-08-12 (Asia/Shanghai)
+
+Observed failure:
+- The protected HTML page loaded and set the title to 政务简历采集, but the React root remained blank.
+- /zhengwujianli/assets/index-B96JyazD.js returned text/html (434 bytes).
+- /zhengwujianli/assets/index-CmqbjyqC.css returned text/html (434 bytes).
+- Chromium reported that the module script was rejected because its MIME type was text/html.
+
+Root cause:
+- The edge Nginx Web location preserved the /zhengwujianli/ prefix because proxy_pass lacked a trailing slash.
+- The Web container stores assets under /assets/ and treated the prefixed resource paths as unknown SPA routes, returning index.html.
+- The API proxy already had the correct trailing slash and was not part of the failure.
+
+Change:
+- Changed only the Stellaris Web proxy target from http://127.0.0.1:3218 to http://127.0.0.1:3218/.
+- Authentication, API routing, containers, application database, and employee systems were not modified.
+
+Remote backup:
+- /www/server/panel/vhost/nginx/tongjixinzhi.cn.conf.bak-subpath-assets-20260812T020255Z
+
+Verification:
+- Tencent deployment configuration tests: 2/2 passed.
+- Nginx syntax and configuration test: passed.
+- Nginx reload: passed.
+- Mapped JavaScript: HTTP 200, application/javascript, 207557 bytes.
+- Mapped CSS: HTTP 200, text/css, 16252 bytes.
+- Headless Chromium post-auth route simulation rendered the React .app root, brand, task console, and history navigation.
+- No module-script MIME error remained.
+- Public unauthenticated redirect contract remained intact.
+- Public unauthenticated API remained 401.
+- Web, backend, and database containers remained healthy with restart count 0.
+- Alibaba Cloud origin, /satmap/, and /kdocs-sync/ remained HTTP 200.
+- Authentication-service process ID remained unchanged.
+- Temporary render proxy was stopped and did not persist.
+- Employee data paths touched: 0.
