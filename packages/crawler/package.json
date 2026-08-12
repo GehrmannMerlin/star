@@ -1,0 +1,67 @@
+{
+  "name": "@stellaris/crawler",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./safe-egress.js": {
+      "types": "./dist/safe-egress.d.ts",
+      "default": "./dist/safe-egress.js"
+    },
+    "./http-fetch.js": {
+      "types": "./dist/http-fetch.d.ts",
+      "default": "./dist/http-fetch.js"
+    },
+    "./page-facts.js": {
+      "types": "./dist/page-facts.d.ts",
+      "default": "./dist/page-facts.js"
+    },
+    "./adapter/loader.js": {
+      "types": "./dist/adapter/loader.d.ts",
+      "default": "./dist/adapter/loader.js"
+    },
+    "./discovery/discover.js": {
+      "types": "./dist/discovery/discover.d.ts",
+      "default": "./dist/discovery/discover.js"
+    },
+    "./browser/render.js": {
+      "types": "./dist/browser/render.d.ts",
+      "default": "./dist/browser/render.js"
+    },
+    "./search/provider.js": {
+      "types": "./dist/search/provider.d.ts",
+      "default": "./dist/search/provider.js"
+    },
+    "./search/fixture-provider.js": {
+      "types": "./dist/search/fixture-provider.d.ts",
+      "default": "./dist/search/fixture-provider.js"
+    },
+    "./testing/fixture-server.js": {
+      "types": "./dist/testing/fixture-server.d.ts",
+      "default": "./dist/testing/fixture-server.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@stellaris/contracts": "workspace:*",
+    "cheerio": "1.2.0",
+    "crawlee": "3.17.0",
+    "playwright": "1.62.1"
+  },
+  "devDependencies": {
+    "@types/cheerio": "1.0.0",
+    "@types/node": "26.1.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

@@ -1,0 +1,65 @@
+# Stellaris 生产部署（服务器 Linux /opt/stellaris）。
+# 镜像已载入（stellaris-backend:test / stellaris-web:test）。
+# backend/web 加入 lumia-prod-internal 网络，供 lumia nginx 反代解析。
+services:
+  postgres:
+    image: postgres:18
+    container_name: stellaris-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stellaris
+      POSTGRES_PASSWORD: ${STELLARIS_PG_PASSWORD:-stellaris_dev}
+      POSTGRES_DB: stellaris
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - /opt/stellaris/data/pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stellaris -d stellaris"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - stellaris_default
+
+  backend:
+    image: stellaris-backend:test
+    container_name: stellaris-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: stellaris
+      PGPASSWORD: ${STELLARIS_PG_PASSWORD:-stellaris_dev}
+      PGDATABASE: stellaris
+      STELLARIS_EVIDENCE_ROOT: /opt/stellaris/data/evidence
+      STELLARIS_EXPORT_ROOT: /opt/stellaris/data/exports
+    volumes:
+      - /opt/stellaris/data:/opt/stellaris/data
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - stellaris_default
+      - lumina_prod_internal
+
+  web:
+    image: stellaris-web:test
+    container_name: stellaris-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5173:80"
+    networks:
+      - stellaris_default
+      - lumina_prod_internal
+
+networks:
+  stellaris_default:
+  lumina_prod_internal:
+    external: true
+    name: lumina-prod-internal

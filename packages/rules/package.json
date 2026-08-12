@@ -1,0 +1,63 @@
+{
+  "name": "@stellaris/rules",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./classify.js": {
+      "types": "./dist/classify.d.ts",
+      "default": "./dist/classify.js"
+    },
+    "./leadership.js": {
+      "types": "./dist/leadership.d.ts",
+      "default": "./dist/leadership.js"
+    },
+    "./selection.js": {
+      "types": "./dist/selection.d.ts",
+      "default": "./dist/selection.js"
+    },
+    "./currentness.js": {
+      "types": "./dist/currentness.d.ts",
+      "default": "./dist/currentness.js"
+    },
+    "./admission.js": {
+      "types": "./dist/admission.d.ts",
+      "default": "./dist/admission.js"
+    },
+    "./recovery.js": {
+      "types": "./dist/recovery.d.ts",
+      "default": "./dist/recovery.js"
+    },
+    "./recovery-executor.js": {
+      "types": "./dist/recovery-executor.d.ts",
+      "default": "./dist/recovery-executor.js"
+    },
+    "./reviewer.js": {
+      "types": "./dist/reviewer.d.ts",
+      "default": "./dist/reviewer.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@stellaris/contracts": "workspace:*",
+    "@stellaris/crawler": "workspace:*",
+    "@stellaris/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.2",
+    "fast-check": "4.9.0",
+    "testcontainers": "12.0.4",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

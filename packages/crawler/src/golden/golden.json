@@ -1,0 +1,18 @@
+{
+  "version": "1",
+  "description": "爬虫系统离线金标（已知答案）。用于准确率评估（§26.2：两名主要自然人 ≥95%、映射 ≥98%、召回 ≥90%）。种子基于 R-21/R-27/R-37 已在线验证结果（安徽省级）。",
+  "regions": {
+    "340000": {
+      "institutions": [
+        {
+          "officialName": "安徽省人民政府",
+          "entryUrl": "https://www.ah.gov.cn/szf/index.html",
+          "primary": [
+            { "personName": "王清宪", "url": "https://www.ah.gov.cn/content/column/6784021?liId=711" },
+            { "personName": "王东伟", "url": "https://www.ah.gov.cn/content/column/6784021?liId=1201" }
+          ]
+        }
+      ]
+    }
+  }
+}

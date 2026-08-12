@@ -1,0 +1,16 @@
+node_modules/
+**/dist/
+**/.tmp-evidence*/
+.superpowers/
+third-party/
+coverage/
+playwright-report/
+*.tsbuildinfo
+*.tar
+*.log
+.env
+.env.*
+!.env.example
+config.local.json
+__pycache__/
+*.pyc

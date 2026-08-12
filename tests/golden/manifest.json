@@ -1,0 +1,24 @@
+{
+  "pages": [
+    {
+      "path": "collection.html",
+      "expectedType": "CURRENT_LEADER_COLLECTION",
+      "assertions": ["张三", "李四", "区长", "常务副区长"]
+    },
+    {
+      "path": "leader-detail-1.html",
+      "expectedType": "OFFICIAL_BIOGRAPHY",
+      "assertions": ["张三", "区长"]
+    },
+    {
+      "path": "leader-detail-2.html",
+      "expectedType": "OFFICIAL_BIOGRAPHY",
+      "assertions": ["李四", "常务副区长"]
+    },
+    {
+      "path": "forbidden-news.html",
+      "expectedType": "FORBIDDEN",
+      "assertions": []
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+.git
+.tmp-*
+*.tsbuildinfo
+docs
+third-party
+.E:\StellarisData
+apps/*/dist
+packages/*/dist

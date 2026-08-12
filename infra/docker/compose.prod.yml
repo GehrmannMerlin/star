@@ -1,0 +1,64 @@
+# Stellaris 生产部署（服务器 Linux 环境）。
+# 前置：/opt/stellaris 部署目录，stellaris-postgres 数据卷。
+# 说明：compose.yml 为本地 Windows 开发用；本文件用于服务器生产。
+
+services:
+  postgres:
+    image: postgres:18
+    container_name: stellaris-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stellaris
+      POSTGRES_PASSWORD: ${STELLARIS_PG_PASSWORD:-stellaris_dev}
+      POSTGRES_DB: stellaris
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - stellaris_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stellaris -d stellaris"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: backend
+    image: stellaris-backend:latest
+    container_name: stellaris-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: stellaris
+      PGPASSWORD: ${STELLARIS_PG_PASSWORD:-stellaris_dev}
+      PGDATABASE: stellaris
+      STELLARIS_EVIDENCE_ROOT: /data/evidence
+      STELLARIS_EXPORT_ROOT: /data/exports
+    volumes:
+      - stellaris_data:/data
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: web
+    image: stellaris-web:latest
+    container_name: stellaris-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5173:80"
+
+volumes:
+  stellaris_pgdata:
+  stellaris_data:

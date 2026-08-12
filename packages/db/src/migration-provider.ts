@@ -1,0 +1,31 @@
+import type { Migration, MigrationProvider } from "kysely/migration";
+import { MIGRATION_001_INITIAL } from "./migration-001-initial.js";
+import { MIGRATION_002_INVARIANTS } from "./migration-002-invariants.js";
+
+/** 按文件顺序组织的迁移。 */
+export interface MigrationEntry {
+  name: string;
+  migration: Migration;
+}
+
+export const MIGRATIONS: MigrationEntry[] = [
+  { name: MIGRATION_001_INITIAL.name, migration: MIGRATION_001_INITIAL.migration },
+  { name: MIGRATION_002_INVARIANTS.name, migration: MIGRATION_002_INVARIANTS.migration },
+];
+
+/**
+ * Kysely MigrationProvider。
+ * 迁移文件内容见 ./migration-001-initial.js。
+ */
+export const migrationProvider: MigrationProvider = {
+  async getMigrations(): Promise<Record<string, Migration>> {
+    const map: Record<string, Migration> = {};
+    for (const entry of MIGRATIONS) {
+      map[entry.name] = entry.migration;
+    }
+    return map;
+  },
+};
+
+/** 待迁移的最新目标版本名（用于迁移工具）。 */
+export const LATEST_MIGRATION_NAME = MIGRATIONS.at(-1)?.name ?? "";

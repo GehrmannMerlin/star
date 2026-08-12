@@ -1,0 +1,78 @@
+{
+  "siteId": "anhui-provincial-government",
+  "hosts": ["www.ah.gov.cn", "*.ah.gov.cn"],
+  "institutionList": null,
+  "leadershipList": {
+    "url": "https://www.ah.gov.cn/szf/index.html",
+    "memberSelector": "a[href*='liId=']"
+  },
+  "memberDetail": {
+    "render": "playwright",
+    "bioSelector": ".personal-intro"
+  },
+  "roles": {
+    "primaryKeywords": ["省长"],
+    "secondaryKeywords": ["常务副省长", "副省长"]
+  },
+  "departmentColumns": {
+    "maxColumns": 6
+  },
+  "regionEntries": {
+    "340000": "https://www.ah.gov.cn/",
+    "340100": "https://www.hefei.gov.cn/",
+    "340200": "https://www.wuhu.gov.cn/",
+    "340300": "https://www.bengbu.gov.cn/",
+    "340400": "https://www.huainan.gov.cn/",
+    "340500": "https://www.mas.gov.cn/",
+    "340600": "https://www.huaibei.gov.cn/",
+    "340700": "https://www.tongling.gov.cn/",
+    "340800": "https://www.anqing.gov.cn/",
+    "341000": "https://www.huangshan.gov.cn/",
+    "341100": "https://www.chuzhou.gov.cn/",
+    "341200": "https://www.fy.gov.cn/",
+    "341300": "https://www.ahsz.gov.cn/",
+    "341500": "https://www.luan.gov.cn/",
+    "341600": "https://www.bozhou.gov.cn/",
+    "341700": "https://www.chizhou.gov.cn/",
+    "341800": "https://www.xuancheng.gov.cn/"
+  },
+  "declaredRegions": ["340000"],
+  "declaredInstitutions": [
+    {
+      "officialName": "安徽省人民政府",
+      "officialEntryUrl": "https://www.ah.gov.cn/szf/index.html",
+      "leadershipUrl": "https://www.ah.gov.cn/szf/index.html"
+    },
+    { "officialName": "省政府办公厅", "officialEntryUrl": "https://www.ah.gov.cn/zwgk/ahsrmzfbgt/szfbgtjj/index.html" },
+    { "officialName": "省教育厅", "officialEntryUrl": "http://jyt.ah.gov.cn/public/7071/40589567.html" },
+    { "officialName": "省科技厅", "officialEntryUrl": "http://kjt.ah.gov.cn/public/content/110120091?1=1&isTab=1" },
+    { "officialName": "省民政厅", "officialEntryUrl": "http://mz.ah.gov.cn/public/21761/122858031.html" },
+    { "officialName": "省司法厅", "officialEntryUrl": "http://sft.ah.gov.cn/public/7061/16303943.html" },
+    { "officialName": "省财政厅", "officialEntryUrl": "http://czt.ah.gov.cn/public/7041/140064081.html" },
+    { "officialName": "省水利厅", "officialEntryUrl": "http://slt.ah.gov.cn/public/21731/75166041.html" },
+    { "officialName": "省商务厅", "officialEntryUrl": "http://commerce.ah.gov.cn/public/21711/115795061.html" },
+    { "officialName": "省审计厅", "officialEntryUrl": "http://sjt.ah.gov.cn/public/9912883/38941013.html" },
+    { "officialName": "省外办", "officialEntryUrl": "https://ahfao.ah.gov.cn/public/21741/120270501.html" },
+    { "officialName": "省国资委", "officialEntryUrl": "http://gzw.ah.gov.cn/public/7031/57820471.html" },
+    { "officialName": "省体育局", "officialEntryUrl": "http://tiyu.ah.gov.cn/public/column/21751?type=4&catId=25090711&action=list" },
+    { "officialName": "省统计局", "officialEntryUrl": "https://tjj.ah.gov.cn/public/column/6981?type=4&catId=49949011&action=list&nav=3" },
+    { "officialName": "省林业局", "officialEntryUrl": "http://lyj.ah.gov.cn/public/9913203/39124279.html" },
+    { "officialName": "省医保局", "officialEntryUrl": "http://ybj.ah.gov.cn/public/7071/117237871.html" },
+    { "officialName": "省管局", "officialEntryUrl": "http://sgj.ah.gov.cn/public/6595761/8444697.html" },
+    { "officialName": "省信访局", "officialEntryUrl": "http://xfj.ah.gov.cn/public/7041/5824481.html" },
+    { "officialName": "省能源局", "officialEntryUrl": "http://fzggw.ah.gov.cn/public/22554241/140927001.html" },
+    { "officialName": "省公安厅", "officialEntryUrl": "https://gat.ah.gov.cn/" },
+    { "officialName": "省人社厅", "officialEntryUrl": "https://hrss.ah.gov.cn/" },
+    { "officialName": "省生态环境厅", "officialEntryUrl": "https://sthjt.ah.gov.cn/" },
+    { "officialName": "省交通厅", "officialEntryUrl": "https://jtt.ah.gov.cn/" },
+    { "officialName": "省卫健委", "officialEntryUrl": "https://wjw.ah.gov.cn/" },
+    { "officialName": "省应急厅", "officialEntryUrl": "https://yjt.ah.gov.cn/" },
+    { "officialName": "省发展改革委", "officialEntryUrl": "https://fzggw.ah.gov.cn/" },
+    { "officialName": "省中医药局", "officialEntryUrl": "https://wjw.ah.gov.cn/ztzl/zyygljzt/jgzz/index.html" },
+    { "officialName": "省疾控局", "officialEntryUrl": "https://wjw.ah.gov.cn/jbyfkzj/jggk/jgzz/index.html" },
+    { "officialName": "省药监局", "officialEntryUrl": "http://mpa.ah.gov.cn/public/4140867/94831769.html" }
+  ],
+  "leadershipByInstitution": {
+    "安徽省人民政府": "https://www.ah.gov.cn/szf/index.html"
+  }
+}
