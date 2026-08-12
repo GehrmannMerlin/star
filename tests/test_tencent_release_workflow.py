@@ -6,6 +6,10 @@ import os
 import tempfile
 import unittest
 
+from scripts.tencent_release.backup import (
+    backup_production_database,
+    verify_backup_in_candidate,
+)
 from scripts.tencent_release.bootstrap import validate_existing_repository
 from scripts.tencent_release.build import build_images
 from scripts.tencent_release.candidate import (
@@ -36,6 +40,25 @@ class FakeRunner:
         command = tuple(argv)
         self.commands.append(command)
         return CompletedCommand(command, 0, self.responses.get(command, ""), "")
+
+    def run_to_file(
+        self,
+        argv: list[str],
+        destination: Path,
+        *,
+        timeout: int,
+        redact: tuple[str, ...] = (),
+    ) -> CompletedCommand:
+        command = tuple(argv)
+        self.commands.append(command)
+        destination.write_bytes(b"PGDMP phase-zero-test-archive")
+        return CompletedCommand(command, 0, "", "")
+
+    def find_command(self, executable: str) -> tuple[str, ...]:
+        return next(
+            command for command in self.commands
+            if executable in command
+        )
 
 
 class PreflightTest(unittest.TestCase):
@@ -296,3 +319,57 @@ class CandidateTest(unittest.TestCase):
         all_arguments = " ".join(argument for command in runner.commands for argument in command)
         self.assertNotIn("POST", all_arguments)
         self.assertNotIn("/api/tasks", all_arguments)
+
+
+class BackupTest(unittest.TestCase):
+    def test_backup_uses_only_production_stellaris_container(self) -> None:
+        responses = {
+            (
+                "docker", "inspect", "--format",
+                '{{index .Config.Labels "com.docker.compose.project"}}',
+                "stellaris-zhengwujianli-db-1",
+            ): "stellaris-zhengwujianli\n",
+            (
+                "docker", "exec", "stellaris-zhengwujianli-db-1",
+                "psql", "-U", "stellaris", "-d", "stellaris",
+                "-Atc", "SELECT current_database()",
+            ): "stellaris\n",
+            (
+                "docker", "exec", "stellaris-zhengwujianli-db-1",
+                "pg_restore", "--list", "/tmp/phase0-backup.dump",
+            ): "archive-ok\n",
+            (
+                "docker", "exec", "stellaris-zhengwujianli-db-1",
+                "psql", "-U", "stellaris", "-d", "stellaris",
+                "-Atc", "SHOW server_version",
+            ): "17.10\n",
+        }
+        runner = FakeRunner(responses)
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = backup_production_database(
+                CONTRACT,
+                runner=runner,
+                timestamp="20260812T120000Z",
+                backup_directory=Path(temporary),
+                write_evidence=False,
+            )
+        command = runner.find_command("pg_dump")
+        self.assertIn("stellaris-zhengwujianli-db-1", command)
+        self.assertIn("--dbname=stellaris", command)
+        self.assertNotIn("auth", " ".join(command).lower())
+        self.assertNotIn("employee", " ".join(command).lower())
+        self.assertGreater(manifest.byte_count, 0)
+        self.assertEqual(
+            set(manifest.__dict__),
+            {
+                "timestamp", "container", "database", "archive_path",
+                "sha256", "byte_count", "postgres_version",
+            },
+        )
+
+    def test_restore_is_allowed_only_in_candidate_database(self) -> None:
+        with self.assertRaisesRegex(ValueError, "restore target must be candidate"):
+            verify_backup_in_candidate(
+                CONTRACT,
+                target_container="stellaris-zhengwujianli-db-1",
+            )

@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 
+from .backup import backup_production_database, verify_backup_in_candidate
 from .bootstrap import bootstrap
 from .build import build_images
 from .candidate import candidate_up, candidate_verify
@@ -43,6 +44,8 @@ def main() -> int:
     subparsers.add_parser("build")
     subparsers.add_parser("candidate-up")
     subparsers.add_parser("candidate-verify")
+    subparsers.add_parser("backup")
+    subparsers.add_parser("restore-verify")
     arguments = parser.parse_args()
 
     _activate_node_24()
@@ -58,8 +61,12 @@ def main() -> int:
             contract,
             require_clean_synced_repository(contract),
         )
-    else:
+    elif arguments.command == "candidate-verify":
         result = candidate_verify(contract)
+    elif arguments.command == "backup":
+        result = backup_production_database(contract)
+    else:
+        result = verify_backup_in_candidate(contract)
     print(
         json.dumps(
             _serializable(result),
