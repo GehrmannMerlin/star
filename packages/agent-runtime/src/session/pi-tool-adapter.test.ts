@@ -47,7 +47,7 @@ describe("Pi custom tool adapter", () => {
   it("keeps coding tools empty and assembles only allowlisted custom tools", () => {
     expect(resolveProductionTools()).toEqual([]);
     const customTools = resolveProductionCustomTools(context);
-    expect(customTools.map((tool) => tool.name)).toEqual(["get_region_context"]);
+    expect(customTools.map((tool) => tool.name)).toEqual(["get_region_context", "search_web"]);
     for (const forbidden of ["read", "bash", "edit", "write"]) {
       expect(customTools.some((tool) => tool.name === forbidden)).toBe(false);
     }

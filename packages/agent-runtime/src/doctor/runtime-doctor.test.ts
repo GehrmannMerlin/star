@@ -25,11 +25,18 @@ describe("RuntimeDoctor", () => {
     expect(result.production_coding_tools.tools).toEqual([]);
   });
 
-  it("reports the generic tool gateway and registered read-only tool", async () => {
+  it("reports the generic tool gateway with both registered custom tools", async () => {
     const result = await runDoctor();
     expect(result.tool_gateway.status).toBe("OK");
-    expect(result.tool_gateway.registered_tools).toBe(1);
-    expect(result.tool_gateway.tools).toEqual(["get_region_context"]);
+    expect(result.tool_gateway.registered_tools).toBe(2);
+    expect(result.tool_gateway.tools).toEqual(["get_region_context", "search_web"]);
+    expect(result.runtime).toBe("FOUNDATION_READY");
+  });
+
+  it("reports search as NOT_CONFIGURED without runtime provider or secret", async () => {
+    const result = await runDoctor();
+    expect(result.search.provider).toBe("NOT_CONFIGURED");
+    expect(result.search.status).toBe("NOT_CONFIGURED");
     expect(result.runtime).toBe("FOUNDATION_READY");
   });
 

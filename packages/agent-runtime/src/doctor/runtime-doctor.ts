@@ -1,7 +1,11 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { VERSION as PI_SDK_VERSION } from "@earendil-works/pi-coding-agent";
-import { createAgentToolRegistry } from "@stellaris/agent-tools";
+import {
+  createAgentToolRegistry,
+  createSearchProviderRegistryFromEnv,
+  resolveSearchRuntimeConfig,
+} from "@stellaris/agent-tools";
 import type { RuntimeConfig } from "../config/runtime-config.js";
 import { createRuntimeConfig } from "../config/runtime-config.js";
 import { ModelPolicy } from "../model/model-policy.js";
@@ -19,6 +23,7 @@ export type DoctorResult = {
   schema_registry: { status: DoctorStatus; count: number; detail: string };
   model: { status: "NOT_CONFIGURED" | "READY"; provider?: string; model_id?: string };
   tool_gateway: { status: DoctorStatus; registered_tools: number; tools: string[]; detail: string };
+  search: { provider: string; status: "READY" | "NOT_CONFIGURED"; detail: string };
   production_coding_tools: { enabled: "NO" | "YES"; tools: string[] };
   runtime: "FOUNDATION_READY" | "ERROR";
 };
@@ -77,6 +82,19 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
     toolGateway.detail = err instanceof Error ? err.message : String(err);
   }
 
+  // Search status reflects whatever the server runtime is configured with.
+  // Provider-neutral: a missing provider or missing provider secret keeps the
+  // foundation ready but reports search as NOT_CONFIGURED. No secret is echoed.
+  const searchConfig = resolveSearchRuntimeConfig();
+  const searchRegistry = createSearchProviderRegistryFromEnv();
+  const searchProviderName = searchConfig?.provider ?? "NOT_CONFIGURED";
+  const searchProvider = searchConfig ? searchRegistry.get(searchConfig.provider) : undefined;
+  const search: DoctorResult["search"] = {
+    provider: searchProviderName,
+    status: searchProvider?.isConfigured ? "READY" : "NOT_CONFIGURED",
+    detail: "",
+  };
+
   // Model status reflects whatever the server runtime is configured with.
   // Provider-neutral: the doctor must not require DeepSeek specifically,
   // because the architecture must support future providers.
@@ -102,6 +120,7 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
     schema_registry: schema,
     model,
     tool_gateway: toolGateway,
+    search,
     production_coding_tools: { enabled: productionCodingToolsEnabled, tools },
     runtime: runtimeStatus,
   };
@@ -137,6 +156,9 @@ export function formatDoctorResult(result: DoctorResult): string {
     `  registered_tools: ${result.tool_gateway.registered_tools}`,
     "tools:",
     ...result.tool_gateway.tools.map((tool) => `  - ${tool}`),
+    "search:",
+    `  provider: ${result.search.provider}`,
+    `  status: ${result.search.status}`,
     "default_coding_tools:",
     `  enabled: ${result.production_coding_tools.enabled}`,
     `  tools: [${result.production_coding_tools.tools.join(", ")}]`,
