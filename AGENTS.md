@@ -35,3 +35,20 @@ Prefer improving generic Search, HTTP, Browser, DOM extraction, Agent workflow, 
 Agent refactor development must occur on `refactor/pi-agent-runtime` or a later explicitly approved development branch.
 
 Do not deploy, restart Tencent production containers, migrate production databases or mutate production volumes unless the user explicitly requests a deployment operation.
+
+## Official Biography Agent Architecture
+
+1. Pi Agent is the semantic execution brain.
+2. `official-biography-evidence` is the canonical domain workflow.
+3. Crawler code is a Generic Tool runtime, not the decision maker.
+4. Do not add province/city/county-specific crawler implementations.
+5. Site profiles are optional acceleration hints only.
+6. Users must not configure LLM models, providers, API keys or search providers.
+7. LLM and Search providers are server-side infrastructure.
+8. Reviewer must eventually run in an independent Agent session.
+9. Recovery must never bypass Reviewer or deterministic gates.
+10. PostgreSQL is the production SSOT.
+11. Pi sessions are not the business SSOT.
+12. FinalDecision will become the final business authority.
+13. Production development happens in isolated server worktrees.
+14. Never mutate Tencent production DB, volumes or containers without explicit user authorization.
