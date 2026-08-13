@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@sinclair/typebox": "0.34.52",
-    "@stellaris/contracts": "workspace:*"
+    "@stellaris/contracts": "workspace:*",
+    "@stellaris/crawler": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "26.1.2",

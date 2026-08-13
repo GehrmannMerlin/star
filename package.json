@@ -16,7 +16,8 @@
     "verify:official-skill": "node scripts/verify-official-biography-skill.mjs",
     "agent:runtime:doctor": "pnpm --filter @stellaris/agent-runtime runtime:doctor",
     "agent:smoke:deepseek": "pnpm --filter @stellaris/agent-runtime smoke:deepseek",
-    "agent:smoke:search": "pnpm --filter @stellaris/agent-runtime smoke:search"
+    "agent:smoke:search": "pnpm --filter @stellaris/agent-runtime smoke:search",
+    "agent:smoke:fetch": "pnpm --filter @stellaris/agent-runtime smoke:fetch"
   },
   "pnpm": {"onlyBuiltDependencies": ["esbuild"]}
 }

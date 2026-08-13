@@ -11,3 +11,6 @@ export * from "./search/search-runtime-config.js";
 export * from "./search/search-provider-runtime.js";
 export * from "./search/providers/bocha-search-provider.js";
 export * from "./tools/search/search-web.js";
+export * from "./tools/fetch/page-fetcher.js";
+export * from "./tools/fetch/crawler-http-adapter.js";
+export * from "./tools/fetch/fetch-page.js";

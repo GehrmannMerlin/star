@@ -73,12 +73,12 @@ describe("AgentSessionFactory", () => {
     if (result.status !== "READY") return;
 
     // No default coding tools in the allowlist; only the custom tools.
-    expect(captured?.tools).toEqual(["get_region_context", "search_web"]);
+    expect(captured?.tools).toEqual(["fetch_page", "get_region_context", "search_web"]);
     for (const forbidden of PI_DEFAULT_CODING_TOOLS) {
       expect(captured?.tools).not.toContain(forbidden);
     }
     const customNames = (captured?.customTools ?? []).map((tool) => tool.name);
-    expect(customNames).toEqual(["get_region_context", "search_web"]);
+    expect(customNames).toEqual(["fetch_page", "get_region_context", "search_web"]);
 
     // The resolved Pi model and the Skill Runtime loader are handed through.
     expect(captured?.model).toBeDefined();

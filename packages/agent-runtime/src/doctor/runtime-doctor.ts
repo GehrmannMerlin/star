@@ -24,6 +24,7 @@ export type DoctorResult = {
   model: { status: "NOT_CONFIGURED" | "READY"; provider?: string; model_id?: string };
   tool_gateway: { status: DoctorStatus; registered_tools: number; tools: string[]; detail: string };
   search: { provider: string; status: "READY" | "NOT_CONFIGURED"; detail: string };
+  http: { status: "READY" | "ERROR"; detail: string };
   production_coding_tools: { enabled: "NO" | "YES"; tools: string[] };
   runtime: "FOUNDATION_READY" | "ERROR";
 };
@@ -98,6 +99,13 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
   // Model status reflects whatever the server runtime is configured with.
   // Provider-neutral: the doctor must not require DeepSeek specifically,
   // because the architecture must support future providers.
+  // HTTP Tool status: reflects whether fetch_page (and its crawler adapter)
+  // loaded into the generic registry. No secret is echoed.
+  const http: DoctorResult["http"] =
+    toolGateway.status === "OK" && toolGateway.tools.includes("fetch_page")
+      ? { status: "READY", detail: "" }
+      : { status: "ERROR", detail: toolGateway.detail };
+
   const modelResolution = new ModelPolicy().resolve("INVENTORY");
   const model: DoctorResult["model"] = modelResolution.ok
     ? { status: "READY", provider: modelResolution.provider, model_id: modelResolution.model }
@@ -121,6 +129,7 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
     model,
     tool_gateway: toolGateway,
     search,
+    http,
     production_coding_tools: { enabled: productionCodingToolsEnabled, tools },
     runtime: runtimeStatus,
   };
@@ -159,6 +168,8 @@ export function formatDoctorResult(result: DoctorResult): string {
     "search:",
     `  provider: ${result.search.provider}`,
     `  status: ${result.search.status}`,
+    "http:",
+    `  status: ${result.http.status}`,
     "default_coding_tools:",
     `  enabled: ${result.production_coding_tools.enabled}`,
     `  tools: [${result.production_coding_tools.tools.join(", ")}]`,

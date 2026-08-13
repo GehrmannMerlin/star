@@ -30,6 +30,8 @@ export interface FetchContext {
   cacheBypass?: boolean;
   /** 抓取结果回调（画像更新挂钩）。 */
   onFetch?: (info: { host: string; ok: boolean; durationMs: number; status: number; retryAfterMs?: number }) => void;
+  /** 调用方 AbortSignal（Agent Tool Gateway 透传）：中止在途请求与正文读取。 */
+  signal?: AbortSignal;
 }
 
 export interface HttpResponse {
@@ -148,6 +150,8 @@ export async function httpFetch(url: string, policy: SafeEgressPolicy, ctx?: Fet
             // 禁用 autoSelectFamily：DNS-pinned 方案需要固定单一解析结果，避免 Node 双栈协商触发非法地址。
             autoSelectFamily: false,
             timeout: policy.maxTimeoutMs,
+            // Agent 调用方 AbortSignal 透传：中止在途请求（Node 同步中止关联 socket 与正文读取）。
+            ...(ctx?.signal ? { signal: ctx.signal } : {}),
           } as http.RequestOptions & { autoSelectFamily?: boolean },
           (res) => resolve(res),
         );

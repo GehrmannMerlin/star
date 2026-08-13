@@ -169,6 +169,9 @@ importers:
       '@stellaris/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@stellaris/crawler':
+        specifier: workspace:*
+        version: link:../crawler
     devDependencies:
       '@types/node':
         specifier: 26.1.2

@@ -25,16 +25,17 @@ describe("RuntimeDoctor", () => {
     expect(result.production_coding_tools.tools).toEqual([]);
   });
 
-  it("reports the generic tool gateway with both registered custom tools", async () => {
+  it("reports the generic tool gateway with all three custom tools", async () => {
     const result = await runDoctor();
     expect(result.tool_gateway.status).toBe("OK");
-    expect(result.tool_gateway.registered_tools).toBe(2);
-    expect(result.tool_gateway.tools).toEqual(["get_region_context", "search_web"]);
+    expect(result.tool_gateway.registered_tools).toBe(3);
+    expect(result.tool_gateway.tools).toEqual(["fetch_page", "get_region_context", "search_web"]);
     expect(result.runtime).toBe("FOUNDATION_READY");
   });
 
-  it("reports search as NOT_CONFIGURED without runtime provider or secret", async () => {
+  it("reports the http fetch tool as READY and search as NOT_CONFIGURED", async () => {
     const result = await runDoctor();
+    expect(result.http.status).toBe("READY");
     expect(result.search.provider).toBe("NOT_CONFIGURED");
     expect(result.search.status).toBe("NOT_CONFIGURED");
     expect(result.runtime).toBe("FOUNDATION_READY");

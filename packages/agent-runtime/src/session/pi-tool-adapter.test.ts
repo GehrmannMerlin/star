@@ -22,7 +22,9 @@ describe("Pi custom tool adapter", () => {
     const registry = createAgentToolRegistry();
     const sink = new MemoryToolEventSink();
     const gateway = new ToolGateway(registry, sink);
-    const [tool] = createPiCustomTools(registry, gateway, context);
+    const tool = createPiCustomTools(registry, gateway, context).find(
+      (item) => item.name === "get_region_context",
+    );
     expect(tool?.name).toBe("get_region_context");
     expect(tool?.parameters).toMatchObject({
       type: "object",
@@ -47,7 +49,11 @@ describe("Pi custom tool adapter", () => {
   it("keeps coding tools empty and assembles only allowlisted custom tools", () => {
     expect(resolveProductionTools()).toEqual([]);
     const customTools = resolveProductionCustomTools(context);
-    expect(customTools.map((tool) => tool.name)).toEqual(["get_region_context", "search_web"]);
+    expect(customTools.map((tool) => tool.name)).toEqual([
+      "fetch_page",
+      "get_region_context",
+      "search_web",
+    ]);
     for (const forbidden of ["read", "bash", "edit", "write"]) {
       expect(customTools.some((tool) => tool.name === forbidden)).toBe(false);
     }
