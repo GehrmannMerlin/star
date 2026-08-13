@@ -1,0 +1,3 @@
+[submodule "third-party/china-official-url-evidence-suite"]
+	path = third-party/china-official-url-evidence-suite
+	url = https://github.com/GehrmannMerlin/china-official-url-evidence-suite.git

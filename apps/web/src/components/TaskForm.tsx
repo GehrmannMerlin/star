@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { InstitutionType } from "@stellaris/contracts";
-import { RegionPicker, type RegionSelection } from "./RegionPicker.js";
+import { EMPTY_REGION_SELECTION, RegionPicker, type RegionSelection } from "./RegionPicker.js";
 import type { ApiClient } from "../app.js";
 
 export interface TaskFormValues {
@@ -34,11 +34,7 @@ export function TaskForm({
   const [regionName, setRegionName] = useState("");
   const [institutionName, setInstitutionName] = useState("");
   const [officialEntryUrl, setOfficialEntryUrl] = useState("");
-  const [regionSelection, setRegionSelection] = useState<RegionSelection>({
-    codes: [],
-    names: [],
-    level: "COUNTY",
-  });
+  const [regionSelection, setRegionSelection] = useState<RegionSelection>(EMPTY_REGION_SELECTION);
 
   const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
@@ -52,7 +48,7 @@ export function TaskForm({
         ...(officialEntryUrl.trim() ? { officialEntryUrl: officialEntryUrl.trim() } : {}),
       });
     } else {
-      if (regionSelection.codes.length === 0) return;
+      if (!regionSelection.finalRegion) return;
       void onSubmit({ mode, regionSelection });
     }
   };
@@ -131,7 +127,7 @@ export function TaskForm({
         <button
           type="submit"
           className="primary start-action"
-          disabled={disabled || (mode === "FULL_INSTITUTION" && regionSelection.codes.length === 0)}
+          disabled={disabled || (mode === "FULL_INSTITUTION" && !regionSelection.finalRegion)}
         >
           <span className="ui-icon icon-play" aria-hidden="true" />
           开始采集

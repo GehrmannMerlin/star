@@ -1,0 +1,6 @@
+{
+  "skills": [
+    "../third-party/china-official-url-evidence-suite/skills/official-biography-evidence"
+  ],
+  "enableSkillCommands": true
+}
