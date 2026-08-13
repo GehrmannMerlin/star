@@ -31,6 +31,17 @@ export class SkillRuntime {
     return this.loader?.getSkills().skills ?? [];
   }
 
+  /**
+   * The live Pi ResourceLoader, for handing into createAgentSession so the
+   * pinned Skill enters the session through Pi's own loader.
+   */
+  getResourceLoader(): ResourceLoader {
+    if (!this.loader) {
+      throw new SkillRuntimeError("SkillRuntime not loaded; call reload() first");
+    }
+    return this.loader;
+  }
+
   async resolveSkill(expectedName: string): Promise<SkillIdentity> {
     if (!this.loader) {
       throw new SkillRuntimeError("SkillRuntime not loaded; call reload() first");

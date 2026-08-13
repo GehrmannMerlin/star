@@ -1,7 +1,9 @@
 export * from "./config/runtime-config.js";
+export * from "./model/runtime-model-config.js";
 export * from "./model/model-types.js";
 export * from "./model/model-config.js";
 export * from "./model/model-policy.js";
+export * from "./model/pi-model-resolver.js";
 export * from "./skill/skill-identity.js";
 export * from "./skill/skill-runtime.js";
 export * from "./skill/skill-schema-registry.js";
@@ -10,3 +12,4 @@ export * from "./session/tool-policy.js";
 export * from "./session/pi-tool-adapter.js";
 export * from "./session/session-factory.js";
 export * from "./doctor/runtime-doctor.js";
+export * from "./smoke/deepseek-smoke.js";

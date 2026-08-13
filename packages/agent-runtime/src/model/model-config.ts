@@ -1,13 +1,14 @@
+import { resolveRuntimeModelConfig, type RuntimeModelEnv } from "./runtime-model-config.js";
 import type { ModelConfig } from "./model-types.js";
 
 /**
  * Server-side model configuration source.
  *
- * In this foundation phase no provider or model has been selected, so this
- * always resolves to `undefined`, which makes ModelPolicy fail closed with
- * MODEL_NOT_CONFIGURED. LLM provider selection is intentionally deferred
- * (see the Phase 2A plan).
+ * Reads the provider and model id from the server runtime environment
+ * (AGENT_MODEL_PROVIDER / AGENT_MODEL_ID). When either is missing this returns
+ * undefined and ModelPolicy fails closed with MODEL_NOT_CONFIGURED. Provider-
+ * neutral: no provider name is hardcoded here.
  */
-export function resolveModelConfig(): ModelConfig | undefined {
-  return undefined;
+export function resolveModelConfig(env?: RuntimeModelEnv): ModelConfig | undefined {
+  return resolveRuntimeModelConfig(env);
 }

@@ -1,4 +1,5 @@
 import type { AgentRole } from "@stellaris/contracts";
+import type { RuntimeModelConfig } from "./runtime-model-config.js";
 
 export { AGENT_ROLES, isAgentRole, type AgentRole } from "@stellaris/contracts";
 
@@ -9,7 +10,4 @@ export { AGENT_ROLES, isAgentRole, type AgentRole } from "@stellaris/contracts";
  * configure `provider`, `model`, `apiKey`, or `thinkingLevel` — those are
  * server-side infrastructure decisions (see AGENTS.md).
  */
-export type ModelConfig = {
-  provider: string;
-  model: string;
-};
+export type ModelConfig = RuntimeModelConfig;

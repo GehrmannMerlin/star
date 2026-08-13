@@ -17,7 +17,7 @@ export type DoctorResult = {
   pi_version: string;
   skill: { name: string; version: string; path: string; discovery: string; status: DoctorStatus; detail: string };
   schema_registry: { status: DoctorStatus; count: number; detail: string };
-  model: { status: "NOT_CONFIGURED" | "CONFIGURED" };
+  model: { status: "NOT_CONFIGURED" | "READY"; provider?: string; model_id?: string };
   tool_gateway: { status: DoctorStatus; registered_tools: number; tools: string[]; detail: string };
   production_coding_tools: { enabled: "NO" | "YES"; tools: string[] };
   runtime: "FOUNDATION_READY" | "ERROR";
@@ -77,8 +77,13 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
     toolGateway.detail = err instanceof Error ? err.message : String(err);
   }
 
+  // Model status reflects whatever the server runtime is configured with.
+  // Provider-neutral: the doctor must not require DeepSeek specifically,
+  // because the architecture must support future providers.
   const modelResolution = new ModelPolicy().resolve("INVENTORY");
-  const modelStatus = modelResolution.ok ? "CONFIGURED" : "NOT_CONFIGURED";
+  const model: DoctorResult["model"] = modelResolution.ok
+    ? { status: "READY", provider: modelResolution.provider, model_id: modelResolution.model }
+    : { status: "NOT_CONFIGURED" };
 
   const tools = resolveProductionTools();
   const productionCodingToolsEnabled: "NO" | "YES" =
@@ -95,7 +100,7 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
     pi_version: PI_SDK_VERSION,
     skill,
     schema_registry: schema,
-    model: { status: modelStatus },
+    model,
     tool_gateway: toolGateway,
     production_coding_tools: { enabled: productionCodingToolsEnabled, tools },
     runtime: runtimeStatus,
@@ -103,6 +108,15 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
 }
 
 export function formatDoctorResult(result: DoctorResult): string {
+  const modelLines =
+    result.model.status === "READY"
+      ? [
+          "  provider: " + (result.model.provider ?? "(not configured)"),
+          "  model_id: " + (result.model.model_id ?? "(not configured)"),
+          `  status: ${result.model.status}`,
+        ]
+      : ["  status: NOT_CONFIGURED"];
+
   const lines = [
     "PI_RUNTIME_DOCTOR",
     `pi_sdk: ${result.pi_sdk}`,
@@ -117,7 +131,7 @@ export function formatDoctorResult(result: DoctorResult): string {
     `  status: ${result.schema_registry.status}`,
     `  count: ${result.schema_registry.count}`,
     "model:",
-    `  status: ${result.model.status}`,
+    ...modelLines,
     "tool_gateway:",
     `  status: ${result.tool_gateway.status}`,
     `  registered_tools: ${result.tool_gateway.registered_tools}`,
