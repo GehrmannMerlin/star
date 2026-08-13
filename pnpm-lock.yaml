@@ -138,19 +138,41 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 0.84.1
         version: 0.84.1(ws@8.21.1)(zod@4.4.3)
+      '@stellaris/agent-tools':
+        specifier: workspace:*
+        version: link:../agent-tools
+      '@stellaris/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       yaml:
         specifier: 2.9.0
         version: 2.9.0
     devDependencies:
-      '@stellaris/contracts':
-        specifier: workspace:*
-        version: link:../contracts
       '@types/node':
         specifier: 26.1.2
         version: 26.1.2
       tsx:
         specifier: 4.23.5
         version: 4.23.5
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@26.1.2)(jsdom@30.0.1)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.5)(yaml@2.9.0))
+
+  packages/agent-tools:
+    dependencies:
+      '@sinclair/typebox':
+        specifier: 0.34.52
+        version: 0.34.52
+      '@stellaris/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.2
+        version: 26.1.2
       typescript:
         specifier: 6.0.3
         version: 6.0.3

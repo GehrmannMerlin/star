@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { VERSION as PI_SDK_VERSION } from "@earendil-works/pi-coding-agent";
+import { createAgentToolRegistry } from "@stellaris/agent-tools";
 import type { RuntimeConfig } from "../config/runtime-config.js";
 import { createRuntimeConfig } from "../config/runtime-config.js";
 import { ModelPolicy } from "../model/model-policy.js";
@@ -17,6 +18,7 @@ export type DoctorResult = {
   skill: { name: string; version: string; path: string; discovery: string; status: DoctorStatus; detail: string };
   schema_registry: { status: DoctorStatus; count: number; detail: string };
   model: { status: "NOT_CONFIGURED" | "CONFIGURED" };
+  tool_gateway: { status: DoctorStatus; registered_tools: number; tools: string[]; detail: string };
   production_coding_tools: { enabled: "NO" | "YES"; tools: string[] };
   runtime: "FOUNDATION_READY" | "ERROR";
 };
@@ -24,6 +26,12 @@ export type DoctorResult = {
 export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): Promise<DoctorResult> {
   const pi_sdk: DoctorStatus =
     typeof PI_SDK_VERSION === "string" && PI_SDK_VERSION.length > 0 ? "OK" : "ERROR";
+  const toolGateway: DoctorResult["tool_gateway"] = {
+    status: "ERROR",
+    registered_tools: 0,
+    tools: [],
+    detail: "",
+  };
 
   const skill: DoctorResult["skill"] = {
     name: "",
@@ -60,6 +68,15 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
     schema.detail = err instanceof Error ? err.message : String(err);
   }
 
+  try {
+    const registeredTools = createAgentToolRegistry().list().map((tool) => tool.name);
+    toolGateway.registered_tools = registeredTools.length;
+    toolGateway.tools = registeredTools;
+    toolGateway.status = "OK";
+  } catch (err) {
+    toolGateway.detail = err instanceof Error ? err.message : String(err);
+  }
+
   const modelResolution = new ModelPolicy().resolve("INVENTORY");
   const modelStatus = modelResolution.ok ? "CONFIGURED" : "NOT_CONFIGURED";
 
@@ -69,6 +86,7 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
 
   const runtimeStatus: DoctorResult["runtime"] =
     pi_sdk === "OK" && skill.status === "OK" && schema.status === "OK" && productionCodingToolsEnabled === "NO"
+      && toolGateway.status === "OK"
       ? "FOUNDATION_READY"
       : "ERROR";
 
@@ -78,6 +96,7 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
     skill,
     schema_registry: schema,
     model: { status: modelStatus },
+    tool_gateway: toolGateway,
     production_coding_tools: { enabled: productionCodingToolsEnabled, tools },
     runtime: runtimeStatus,
   };
@@ -99,7 +118,12 @@ export function formatDoctorResult(result: DoctorResult): string {
     `  count: ${result.schema_registry.count}`,
     "model:",
     `  status: ${result.model.status}`,
-    "production_coding_tools:",
+    "tool_gateway:",
+    `  status: ${result.tool_gateway.status}`,
+    `  registered_tools: ${result.tool_gateway.registered_tools}`,
+    "tools:",
+    ...result.tool_gateway.tools.map((tool) => `  - ${tool}`),
+    "default_coding_tools:",
     `  enabled: ${result.production_coding_tools.enabled}`,
     `  tools: [${result.production_coding_tools.tools.join(", ")}]`,
     "runtime:",

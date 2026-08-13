@@ -2,15 +2,15 @@
  * Production tool policy for Pi Agent sessions.
  *
  * Pi ships default coding tools (read, bash, edit, write). Those MUST NOT
- * enter a production Agent session. Custom Agent tools arrive in a later
- * phase, so the production allowlist is empty for now.
+ * enter a production Agent session. Allowlisted custom Agent tools are
+ * assembled separately by the Pi adapter.
  */
 export const PI_DEFAULT_CODING_TOOLS = ["read", "bash", "edit", "write"] as const;
 
 export type ProductionToolPolicy = {
   /** Default Pi coding tools are disabled for production sessions. */
   defaultCodingToolsEnabled: false;
-  /** Explicit production tool allowlist (empty until custom tools land). */
+  /** Pi's built-in production tool allowlist remains empty. */
   tools: readonly string[];
 };
 

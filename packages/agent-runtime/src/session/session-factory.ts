@@ -18,7 +18,8 @@ export class AgentSessionFactory {
       return { status: "NOT_CONFIGURED", role, reason: MODEL_NOT_CONFIGURED };
     }
     // Deferred to Step 2B: create a Pi AgentSession with the resolved model
-    // and `tools: resolveProductionTools()` (see tool-policy.ts).
+    // with `tools: resolveProductionTools()` and allowlisted `customTools`
+    // from the Pi adapter.
     return { status: "READY", role };
   }
 }

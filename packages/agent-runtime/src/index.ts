@@ -7,5 +7,6 @@ export * from "./skill/skill-runtime.js";
 export * from "./skill/skill-schema-registry.js";
 export * from "./session/session-types.js";
 export * from "./session/tool-policy.js";
+export * from "./session/pi-tool-adapter.js";
 export * from "./session/session-factory.js";
 export * from "./doctor/runtime-doctor.js";

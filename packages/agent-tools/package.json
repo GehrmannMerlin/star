@@ -1,5 +1,5 @@
 {
-  "name": "@stellaris/agent-runtime",
+  "name": "@stellaris/agent-tools",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,18 +8,14 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "runtime:doctor": "tsx src/doctor/runtime-doctor.ts"
+    "test": "vitest run"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.1",
-    "@stellaris/agent-tools": "workspace:*",
-    "@stellaris/contracts": "workspace:*",
-    "yaml": "2.9.0"
+    "@sinclair/typebox": "0.34.52",
+    "@stellaris/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "26.1.2",
-    "tsx": "4.23.5",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   }

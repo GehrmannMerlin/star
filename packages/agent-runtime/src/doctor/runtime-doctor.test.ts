@@ -25,6 +25,14 @@ describe("RuntimeDoctor", () => {
     expect(result.production_coding_tools.tools).toEqual([]);
   });
 
+  it("reports the generic tool gateway and registered read-only tool", async () => {
+    const result = await runDoctor();
+    expect(result.tool_gateway.status).toBe("OK");
+    expect(result.tool_gateway.registered_tools).toBe(1);
+    expect(result.tool_gateway.tools).toEqual(["get_region_context"]);
+    expect(result.runtime).toBe("FOUNDATION_READY");
+  });
+
   it("formats output with the doctor banner and no secrets", async () => {
     const text = formatDoctorResult(await runDoctor());
     expect(text).toContain("PI_RUNTIME_DOCTOR");
