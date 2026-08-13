@@ -13,7 +13,8 @@
     "lint": "pnpm -r lint",
     "test:tencent-release": "python3 -m unittest discover -s tests -p 'test_tencent_release_*.py' -v",
     "verify:tencent-release": "pnpm test:tencent-release && node --test tests/tencent-deploy-config.test.mjs",
-    "verify:official-skill": "node scripts/verify-official-biography-skill.mjs"
+    "verify:official-skill": "node scripts/verify-official-biography-skill.mjs",
+    "agent:runtime:doctor": "pnpm --filter @stellaris/agent-runtime runtime:doctor"
   },
   "pnpm": {"onlyBuiltDependencies": ["esbuild"]}
 }
