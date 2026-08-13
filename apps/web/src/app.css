@@ -374,6 +374,16 @@ textarea::placeholder {
   gap: 32px;
 }
 
+.rp-field {
+  min-width: 0;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--color-text-body);
+  font-size: 14px;
+}
+
 .rp-row select,
 .targeted-card input,
 .th-filters select {
@@ -389,7 +399,7 @@ textarea::placeholder {
 
 .rp-row select {
   min-width: 0;
-  flex: 1 1 0;
+  width: 100%;
 }
 
 .rp-row select[multiple] {
@@ -404,6 +414,17 @@ textarea::placeholder {
   cursor: not-allowed;
   background: #f7faf9;
   color: var(--color-text-placeholder);
+}
+
+.rp-selection-summary {
+  margin-top: 22px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.rp-selection-summary p {
+  margin: 4px 0 0;
 }
 
 .region-picker textarea {

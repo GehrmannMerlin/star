@@ -139,20 +139,43 @@ describe("网页工作台", () => {
     render(<App deps={deps} />);
     // 默认 FULL_INSTITUTION 模式，RegionPicker 已渲染。
     expect(screen.getByText("采集范围")).toBeInTheDocument();
-    // mock 省份加载 → 选省 → 选地市 → 展开。
-    await user.click(screen.getByLabelText("省份"));
+    // mock 省份加载 → 选省 → 选地市。
+    await waitFor(() => expect(screen.getByLabelText("省份")).toHaveTextContent("安徽省"));
     await user.selectOptions(screen.getByLabelText("省份"), "340000");
-    await waitFor(() => expect(screen.getByLabelText("地市（可多选）").children.length).toBe(1));
-    await user.selectOptions(screen.getByLabelText("地市（可多选）"), "340100");
-    await waitFor(() => expect(mockApi.expandRegions).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByLabelText("地市")).toBeEnabled());
+    await user.selectOptions(screen.getByLabelText("地市"), "340100");
     await user.click(screen.getByRole("button", { name: "开始采集" }));
     await waitFor(() => expect(mockApi.createTask).toHaveBeenCalled());
     const req = (mockApi.createTask as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
       mode: string;
+      regionCode: string;
       regionCodes: string[];
     };
     expect(req.mode).toBe("FULL_INSTITUTION");
-    expect(req.regionCodes).toContain("340100");
+    expect(req.regionCodes).toEqual(["340100"]);
+    expect(req.regionCode).toBe("340100");
+  });
+
+  it("仅选择省份时允许省级提交并使用省级 code", async () => {
+    render(<App deps={deps} />);
+    await waitFor(() => expect(screen.getByLabelText("省份")).toHaveTextContent("安徽省"));
+    await user.selectOptions(screen.getByLabelText("省份"), "340000");
+    await waitFor(() => expect(screen.getByText("任务层级：省级")).toBeInTheDocument());
+    const submit = screen.getByRole("button", { name: "开始采集" });
+    expect(submit).toBeEnabled();
+    await user.click(submit);
+    await waitFor(() => expect(mockApi.createTask).toHaveBeenCalled());
+    const req = (mockApi.createTask as ReturnType<typeof vi.fn>).mock.calls[0]![0] as { regionCode: string };
+    expect(req.regionCode).toBe("340000");
+  });
+
+  it("完整机构模式不显示旧的展开层级和批量代码控件", () => {
+    render(<App deps={deps} />);
+    expect(screen.queryByText("展开层级")).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "校验并添加" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("完整机构模式")).toBeInTheDocument();
+    expect(screen.getByLabelText("指定机构")).toBeInTheDocument();
   });
 
   it("两视图切换：点击历史记录显示历史视图", async () => {

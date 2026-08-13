@@ -1,23 +1,48 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RegionNode } from "@stellaris/contracts";
 import type { ApiClient } from "../app.js";
 
-/** 行政区选择结果（已展开冻结）。 */
+export type DerivedRegionLevel = "PROVINCE" | "PREFECTURE" | "COUNTY";
+
 export interface RegionSelection {
+  province: RegionNode | null;
+  city: RegionNode | null;
+  county: RegionNode | null;
+  finalRegion: RegionNode | null;
+  level: DerivedRegionLevel | null;
+  /** Path metadata retained for the existing form/request boundary. */
   codes: string[];
   names: string[];
-  level: "COUNTY" | "TOWN_STREET";
 }
 
-const EMPTY: RegionSelection = { codes: [], names: [], level: "COUNTY" };
+export const EMPTY_REGION_SELECTION: RegionSelection = {
+  province: null,
+  city: null,
+  county: null,
+  finalRegion: null,
+  level: null,
+  codes: [],
+  names: [],
+};
 
-/**
- * 行政区选择器（规格 §8.1 / §20.1 采集范围多选）。
- * 三种输入方式：
- * - 级联多选：省 → 地市 → 区县，选中父级自动展开；
- * - 上传名单：文本输入代码/名称，validate 校验 + expand 展开；
- * - 展开层级单选：COUNTY / TOWN_STREET。
- */
+function makeSelection(
+  province: RegionNode | null,
+  city: RegionNode | null,
+  county: RegionNode | null,
+): RegionSelection {
+  const path = [province, city, county].filter((node): node is RegionNode => node !== null);
+  const finalRegion = path.at(-1) ?? null;
+  return {
+    province,
+    city,
+    county,
+    finalRegion,
+    level: county ? "COUNTY" : city ? "PREFECTURE" : province ? "PROVINCE" : null,
+    codes: path.map((node) => node.code),
+    names: path.map((node) => node.name),
+  };
+}
+
 export function RegionPicker({
   api,
   value,
@@ -25,156 +50,152 @@ export function RegionPicker({
 }: {
   api: ApiClient;
   value: RegionSelection;
-  onChange: (sel: RegionSelection) => void;
+  onChange: (selection: RegionSelection) => void;
 }): React.ReactElement {
   const [provinces, setProvinces] = useState<RegionNode[]>([]);
-  const [selectedProvince, setSelectedProvince] = useState<string>("");
   const [cities, setCities] = useState<RegionNode[]>([]);
-  const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
-  const [uploadText, setUploadText] = useState("");
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [level, setLevel] = useState<"COUNTY" | "TOWN_STREET">(value.level);
+  const [counties, setCounties] = useState<RegionNode[]>([]);
+  const [selectedProvince, setSelectedProvince] = useState<RegionNode | null>(value.province);
+  const [selectedCity, setSelectedCity] = useState<RegionNode | null>(value.city);
+  const [selectedCounty, setSelectedCounty] = useState<RegionNode | null>(value.county);
+  const [provinceError, setProvinceError] = useState<string | null>(null);
+  const [cityError, setCityError] = useState<string | null>(null);
+  const [countyError, setCountyError] = useState<string | null>(null);
+  const [cityLoadingFailed, setCityLoadingFailed] = useState(false);
+  const [countyLoadingFailed, setCountyLoadingFailed] = useState(false);
 
-  const loadProvinces = async (): Promise<void> => {
-    if (provinces.length === 0) {
-      setProvinces(await api.listProvinces());
+  useEffect(() => {
+    let active = true;
+    void api.listProvinces().then(
+      (nodes) => {
+        if (active) {
+          setProvinces(nodes);
+          setProvinceError(null);
+        }
+      },
+      (error: unknown) => {
+        if (active) setProvinceError(error instanceof Error ? error.message : "省份加载失败");
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [api]);
+
+  const selection = useMemo(
+    () => makeSelection(selectedProvince, selectedCity, selectedCounty),
+    [selectedProvince, selectedCity, selectedCounty],
+  );
+
+  useEffect(() => {
+    onChange(selection);
+  }, [onChange, selection]);
+
+  const loadCities = async (province: RegionNode | null): Promise<void> => {
+    setCities([]);
+    setCounties([]);
+    setSelectedCity(null);
+    setSelectedCounty(null);
+    setCityError(null);
+    setCountyError(null);
+    setCityLoadingFailed(false);
+    setCountyLoadingFailed(false);
+    if (!province) return;
+    try {
+      setCities(await api.listChildren(province.code));
+    } catch (error) {
+      setCityLoadingFailed(true);
+      setCityError(error instanceof Error ? error.message : "地市加载失败");
     }
   };
 
-  const handleProvinceChange = async (code: string): Promise<void> => {
-    setSelectedProvince(code);
-    if (code) {
-      setCities(await api.listChildren(code));
-    } else {
-      setCities([]);
+  const handleProvinceChange = (code: string): void => {
+    const province = provinces.find((node) => node.code === code) ?? null;
+    setSelectedProvince(province);
+    void loadCities(province);
+  };
+
+  const handleCityChange = async (code: string): Promise<void> => {
+    const city = cities.find((node) => node.code === code) ?? null;
+    setSelectedCity(city);
+    setSelectedCounty(null);
+    setCounties([]);
+    setCountyError(null);
+    setCountyLoadingFailed(false);
+    if (!city) return;
+    try {
+      setCounties(await api.listChildren(city.code));
+    } catch (error) {
+      setCountyLoadingFailed(true);
+      setCountyError(error instanceof Error ? error.message : "区县加载失败");
     }
   };
 
-  const toggleCity = (code: string): void => {
-    const next = new Set(selectedCities);
-    if (next.has(code)) {
-      next.delete(code);
-    } else {
-      next.add(code);
-    }
-    setSelectedCities(next);
-    // 同步展开结果：每个选中地市展开至目标层级。
-    applySelection(Array.from(next), level);
-  };
-
-  const applySelection = async (cityCodes: string[], targetLevel: "COUNTY" | "TOWN_STREET"): Promise<void> => {
-    if (cityCodes.length === 0) {
-      onChange(EMPTY);
-      return;
-    }
-    const expanded = await api.expandRegions(cityCodes, targetLevel);
-    onChange({
-      codes: expanded.map((r) => r.code),
-      names: expanded.map((r) => r.name),
-      level: targetLevel,
-    });
-  };
-
-  const handleLevelChange = (next: "COUNTY" | "TOWN_STREET"): void => {
-    setLevel(next);
-    void applySelection(Array.from(selectedCities), next);
-  };
-
-  const handleUpload = async (): Promise<void> => {
-    const codes = uploadText
-      .split(/[\n,，\s]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (codes.length === 0) {
-      setUploadError("请输入行政区划代码");
-      return;
-    }
-    const res = await api.validateRegions(codes);
-    if (!res.valid) {
-      setUploadError(`无效代码：${res.invalid.join("、")}`);
-      return;
-    }
-    setUploadError(null);
-    const expanded = await api.expandRegions(codes, level);
-    onChange({ codes: expanded.map((r) => r.code), names: expanded.map((r) => r.name), level });
-  };
+  const displayedLevel = selection.level === "PROVINCE"
+    ? "省级"
+    : selection.level === "PREFECTURE"
+      ? "地市级"
+      : selection.level === "COUNTY"
+        ? "区县级"
+        : null;
 
   return (
     <fieldset className="region-picker" aria-label="采集范围">
       <legend>采集范围</legend>
-
       <div className="rp-block rp-block--selectors">
-        <span className="rp-label">行政区多选</span>
+        <span className="rp-label">行政区选择</span>
         <div className="rp-row">
-          <select
-            aria-label="省份"
-            value={selectedProvince}
-            onFocus={() => void loadProvinces()}
-            onChange={(e) => void handleProvinceChange(e.target.value)}
-          >
-            <option value="">选择省份</option>
-            {provinces.map((p) => (
-              <option key={p.code} value={p.code}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="地市（可多选）"
-            value={Array.from(selectedCities)}
-            multiple
-            onChange={(e) => toggleCity(e.target.value)}
-            disabled={!selectedProvince}
-          >
-            {cities.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <label className="rp-field">
+            <span>省份</span>
+            <select
+              aria-label="省份"
+              value={selectedProvince?.code ?? ""}
+              onChange={(event) => handleProvinceChange(event.target.value)}
+            >
+              <option value="">请选择省份</option>
+              {provinces.map((province) => (
+                <option key={province.code} value={province.code}>{province.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="rp-field">
+            <span>地市</span>
+            <select
+              aria-label="地市"
+              value={selectedCity?.code ?? ""}
+              disabled={!selectedProvince || cityLoadingFailed}
+              onChange={(event) => void handleCityChange(event.target.value)}
+            >
+              <option value="">请选择地市</option>
+              {cities.map((city) => (
+                <option key={city.code} value={city.code}>{city.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="rp-field">
+            <span>区县</span>
+            <select
+              aria-label="区县"
+              value={selectedCounty?.code ?? ""}
+              disabled={!selectedCity || countyLoadingFailed}
+              onChange={(event) => {
+                setSelectedCounty(counties.find((node) => node.code === event.target.value) ?? null);
+              }}
+            >
+              <option value="">请选择区县</option>
+              {counties.map((county) => (
+                <option key={county.code} value={county.code}>{county.name}</option>
+              ))}
+            </select>
+          </label>
         </div>
-        {selectedCities.size > 0 && (
-          <p className="rp-hint">
-            已选 {selectedCities.size} 个地市 → 展开 {value.codes.length} 个行政区
-          </p>
-        )}
+        {provinceError && <p className="error">{provinceError}</p>}
+        {cityError && <p className="error">{cityError}</p>}
+        {countyError && <p className="error">{countyError}</p>}
       </div>
-
-      <div className="rp-block rp-block--upload">
-        <span className="rp-label">或上传名单</span>
-        <textarea
-          aria-label="上传行政区代码"
-          value={uploadText}
-          onChange={(e) => setUploadText(e.target.value)}
-          placeholder="每行一个行政区划代码，如：340100"
-          rows={3}
-        />
-        <button type="button" className="secondary" onClick={() => void handleUpload()}>
-          校验并添加
-        </button>
-        {uploadError && <p className="error">{uploadError}</p>}
-      </div>
-
-      <div className="rp-block rp-block--levels">
-        <span className="rp-label">展开层级</span>
-        <label>
-          <input
-            type="radio"
-            name="rp-level"
-            checked={level === "COUNTY"}
-            onChange={() => handleLevelChange("COUNTY")}
-          />
-          区县
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="rp-level"
-            checked={level === "TOWN_STREET"}
-            onChange={() => handleLevelChange("TOWN_STREET")}
-          />
-          乡镇/街道
-        </label>
+      <div className="rp-selection-summary" aria-live="polite">
+        <p>当前采集范围：{selection.names.length > 0 ? selection.names.join(" / ") : "未选择"}</p>
+        <p>任务层级：{displayedLevel ?? "未确定"}</p>
       </div>
     </fieldset>
   );

@@ -205,13 +205,20 @@ function buildCreateRequest(values: TaskFormValues): CreateTaskRequest {
     ruleVersion: "v1",
   };
   if (values.mode === "FULL_INSTITUTION" && values.regionSelection) {
+    const target = values.regionSelection.finalRegion;
+    if (!target) {
+      throw new Error("请选择行政区");
+    }
     return {
       ...base,
       mode: "FULL_INSTITUTION",
-      regionCode: values.regionSelection.codes[0] ?? "340000",
-      regionName: values.regionSelection.names[0] ?? "安徽省",
-      regionCodes: values.regionSelection.codes,
-      expandLevel: values.regionSelection.level,
+      regionCode: target.code,
+      regionName: target.name,
+      regionCodes: [target.code],
+      // Legacy backend compatibility only.
+      // The frontend task level is now derived from the selected target region.
+      // Remove when the Agent workflow backend contract replaces expandLevel.
+      expandLevel: "COUNTY",
     };
   }
   return {
