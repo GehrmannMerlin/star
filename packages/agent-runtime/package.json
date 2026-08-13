@@ -12,12 +12,14 @@
     "runtime:doctor": "tsx src/doctor/runtime-doctor.ts",
     "smoke:deepseek": "tsx src/smoke/deepseek-smoke.ts",
     "smoke:search": "tsx src/smoke/search-smoke.ts",
-    "smoke:fetch": "tsx src/smoke/fetch-smoke.ts"
+    "smoke:fetch": "tsx src/smoke/fetch-smoke.ts",
+    "smoke:render": "tsx src/smoke/render-smoke.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.1",
     "@stellaris/agent-tools": "workspace:*",
     "@stellaris/contracts": "workspace:*",
+    "@stellaris/crawler": "workspace:*",
     "yaml": "2.9.0"
   },
   "devDependencies": {

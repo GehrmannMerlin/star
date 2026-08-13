@@ -144,6 +144,9 @@ importers:
       '@stellaris/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@stellaris/crawler':
+        specifier: workspace:*
+        version: link:../crawler
       yaml:
         specifier: 2.9.0
         version: 2.9.0

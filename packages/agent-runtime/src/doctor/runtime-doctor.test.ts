@@ -25,11 +25,16 @@ describe("RuntimeDoctor", () => {
     expect(result.production_coding_tools.tools).toEqual([]);
   });
 
-  it("reports the generic tool gateway with all three custom tools", async () => {
+  it("reports the generic tool gateway with all four custom tools", async () => {
     const result = await runDoctor();
     expect(result.tool_gateway.status).toBe("OK");
-    expect(result.tool_gateway.registered_tools).toBe(3);
-    expect(result.tool_gateway.tools).toEqual(["fetch_page", "get_region_context", "search_web"]);
+    expect(result.tool_gateway.registered_tools).toBe(4);
+    expect(result.tool_gateway.tools).toEqual([
+      "fetch_page",
+      "get_region_context",
+      "render_page",
+      "search_web",
+    ]);
     expect(result.runtime).toBe("FOUNDATION_READY");
   });
 
@@ -41,9 +46,19 @@ describe("RuntimeDoctor", () => {
     expect(result.runtime).toBe("FOUNDATION_READY");
   });
 
+  it("reports browser readiness without ever failing the foundation doctor", async () => {
+    const result = await runDoctor();
+    expect(["READY", "NOT_READY"]).toContain(result.browser.status);
+    if (result.browser.status === "READY") {
+      expect(result.browser.executable_path).toBeTruthy();
+    }
+    expect(result.runtime).toBe("FOUNDATION_READY");
+  });
+
   it("formats output with the doctor banner and no secrets", async () => {
     const text = formatDoctorResult(await runDoctor());
     expect(text).toContain("PI_RUNTIME_DOCTOR");
+    expect(text).toContain("browser:");
     for (const secret of ["secret", "api key", "password", "token"]) {
       expect(text.toLowerCase()).not.toContain(secret);
     }

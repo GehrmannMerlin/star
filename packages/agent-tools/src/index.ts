@@ -14,3 +14,6 @@ export * from "./tools/search/search-web.js";
 export * from "./tools/fetch/page-fetcher.js";
 export * from "./tools/fetch/crawler-http-adapter.js";
 export * from "./tools/fetch/fetch-page.js";
+export * from "./tools/render/page-renderer.js";
+export * from "./tools/render/crawler-browser-adapter.js";
+export * from "./tools/render/render-page.js";

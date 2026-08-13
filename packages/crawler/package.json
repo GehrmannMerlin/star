@@ -18,6 +18,10 @@
       "types": "./dist/http-fetch.d.ts",
       "default": "./dist/http-fetch.js"
     },
+    "./dns-lookup.js": {
+      "types": "./dist/dns-lookup.d.ts",
+      "default": "./dist/dns-lookup.js"
+    },
     "./page-facts.js": {
       "types": "./dist/page-facts.d.ts",
       "default": "./dist/page-facts.js"

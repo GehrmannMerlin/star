@@ -17,7 +17,8 @@
     "agent:runtime:doctor": "pnpm --filter @stellaris/agent-runtime runtime:doctor",
     "agent:smoke:deepseek": "pnpm --filter @stellaris/agent-runtime smoke:deepseek",
     "agent:smoke:search": "pnpm --filter @stellaris/agent-runtime smoke:search",
-    "agent:smoke:fetch": "pnpm --filter @stellaris/agent-runtime smoke:fetch"
+    "agent:smoke:fetch": "pnpm --filter @stellaris/agent-runtime smoke:fetch",
+    "agent:smoke:render": "pnpm --filter @stellaris/agent-runtime smoke:render"
   },
   "pnpm": {"onlyBuiltDependencies": ["esbuild"]}
 }

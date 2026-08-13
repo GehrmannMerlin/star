@@ -25,6 +25,8 @@ const fakeSession = {
   sessionManager: { getSessionId: () => "session-test" },
 };
 
+const ALLOWLIST = ["fetch_page", "get_region_context", "render_page", "search_web"];
+
 describe("AgentSessionFactory", () => {
   it("fails closed with MODEL_NOT_CONFIGURED when no model is configured", async () => {
     const factory = new AgentSessionFactory({
@@ -73,12 +75,12 @@ describe("AgentSessionFactory", () => {
     if (result.status !== "READY") return;
 
     // No default coding tools in the allowlist; only the custom tools.
-    expect(captured?.tools).toEqual(["fetch_page", "get_region_context", "search_web"]);
+    expect(captured?.tools).toEqual(ALLOWLIST);
     for (const forbidden of PI_DEFAULT_CODING_TOOLS) {
       expect(captured?.tools).not.toContain(forbidden);
     }
     const customNames = (captured?.customTools ?? []).map((tool) => tool.name);
-    expect(customNames).toEqual(["fetch_page", "get_region_context", "search_web"]);
+    expect(customNames).toEqual(ALLOWLIST);
 
     // The resolved Pi model and the Skill Runtime loader are handed through.
     expect(captured?.model).toBeDefined();

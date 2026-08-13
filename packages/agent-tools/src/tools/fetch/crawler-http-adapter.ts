@@ -21,7 +21,7 @@ function decodeBody(body: Uint8Array, contentType: string): string {
 /** Cheap protocol pre-check for a clean INVALID_INPUT; the authoritative guard
  *  (assertAllowedUrl + DNS-pinned lookup) stays inside the crawler and is never
  *  bypassed. */
-function assertPublicHttpUrl(url: string): void {
+export function assertPublicHttpUrl(url: string): void {
   let parsed: URL;
   try {
     parsed = new URL(url);

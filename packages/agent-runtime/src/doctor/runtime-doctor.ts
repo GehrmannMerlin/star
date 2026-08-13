@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { VERSION as PI_SDK_VERSION } from "@earendil-works/pi-coding-agent";
@@ -6,6 +7,7 @@ import {
   createSearchProviderRegistryFromEnv,
   resolveSearchRuntimeConfig,
 } from "@stellaris/agent-tools";
+import { resolveChromiumExecutablePath } from "@stellaris/crawler/browser/render.js";
 import type { RuntimeConfig } from "../config/runtime-config.js";
 import { createRuntimeConfig } from "../config/runtime-config.js";
 import { ModelPolicy } from "../model/model-policy.js";
@@ -25,6 +27,7 @@ export type DoctorResult = {
   tool_gateway: { status: DoctorStatus; registered_tools: number; tools: string[]; detail: string };
   search: { provider: string; status: "READY" | "NOT_CONFIGURED"; detail: string };
   http: { status: "READY" | "ERROR"; detail: string };
+  browser: { status: "READY" | "NOT_READY"; executable_path?: string; detail: string };
   production_coding_tools: { enabled: "NO" | "YES"; tools: string[] };
   runtime: "FOUNDATION_READY" | "ERROR";
 };
@@ -106,6 +109,26 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
       ? { status: "READY", detail: "" }
       : { status: "ERROR", detail: toolGateway.detail };
 
+  // Browser status: reflects whether a Chromium executable is resolvable for the
+  // dev/agent BrowserPool. Informational (like http): a missing browser never
+  // fails the foundation doctor, so a Browser-less runtime can still report.
+  let browserExecutablePath = "";
+  let browserDetail = "";
+  try {
+    browserExecutablePath = resolveChromiumExecutablePath();
+    if (!existsSync(browserExecutablePath)) {
+      browserDetail = "chromium executable not found";
+    }
+  } catch (err) {
+    browserExecutablePath = "";
+    browserDetail = err instanceof Error ? err.message : String(err);
+  }
+  const browser: DoctorResult["browser"] = {
+    status: browserExecutablePath && !browserDetail ? "READY" : "NOT_READY",
+    ...(browserExecutablePath ? { executable_path: browserExecutablePath } : {}),
+    detail: browserDetail,
+  };
+
   const modelResolution = new ModelPolicy().resolve("INVENTORY");
   const model: DoctorResult["model"] = modelResolution.ok
     ? { status: "READY", provider: modelResolution.provider, model_id: modelResolution.model }
@@ -130,6 +153,7 @@ export async function runDoctor(config: RuntimeConfig = createRuntimeConfig()): 
     tool_gateway: toolGateway,
     search,
     http,
+    browser,
     production_coding_tools: { enabled: productionCodingToolsEnabled, tools },
     runtime: runtimeStatus,
   };
@@ -170,6 +194,9 @@ export function formatDoctorResult(result: DoctorResult): string {
     `  status: ${result.search.status}`,
     "http:",
     `  status: ${result.http.status}`,
+    "browser:",
+    `  status: ${result.browser.status}`,
+    ...(result.browser.executable_path ? [`  executable_path: ${result.browser.executable_path}`] : []),
     "default_coding_tools:",
     `  enabled: ${result.production_coding_tools.enabled}`,
     `  tools: [${result.production_coding_tools.tools.join(", ")}]`,

@@ -18,6 +18,17 @@ describe("进程内浏览器池", () => {
     expect(res.bodyText).toContain("省委副书记、省长");
     expect(res.waitSignals).toContain(".bio");
     expect(res.html.byteLength).toBeGreaterThan(0);
+    expect(res.statusCode).toBeGreaterThanOrEqual(200);
     await srv.close();
+  }, 60_000);
+
+  it("pre-aborted signal throws before any browser is launched", async () => {
+    pool = new BrowserPool({ maxPages: 2 });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      pool.render("http://example.com/", { signal: controller.signal }),
+    ).rejects.toThrow("aborted");
+    expect(pool.isOpen()).toBe(false);
   }, 60_000);
 });
