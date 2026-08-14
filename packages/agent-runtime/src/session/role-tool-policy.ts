@@ -35,13 +35,21 @@ export const INVESTIGATOR_EVIDENCE_ROLE_TOOLS = [
   "submit_investigator_evidence",
 ] as const;
 
+/** Tools the Reviewer Agent may call (submit_review_decision is the only
+ *  output boundary). No submit_inventory / submit_investigation /
+ *  submit_investigator_evidence; no coding tools. */
+export const REVIEWER_ROLE_TOOLS = [
+  ...BASE_AGENT_TOOLS,
+  "submit_review_decision",
+] as const;
+
 export type RoleToolPolicy = Record<AgentRole, readonly string[]>;
 
 export const ROLE_TOOL_POLICY: RoleToolPolicy = {
   INVENTORY: INVENTORY_ROLE_TOOLS,
   INVESTIGATOR: INVESTIGATOR_ROLE_TOOLS,
   RECOVERY: BASE_AGENT_TOOLS,
-  REVIEWER: BASE_AGENT_TOOLS,
+  REVIEWER: REVIEWER_ROLE_TOOLS,
 };
 
 /** Allowed tool names for a role (the Pi session allowlist source). */

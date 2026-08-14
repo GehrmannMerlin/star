@@ -1,0 +1,106 @@
+{
+  "region_code": "320106",
+  "institution_id": "glq-people-gov",
+  "institution_name": "鼓楼区人民政府",
+  "administrative_level": "COUNTY",
+  "inventory": [
+    {
+      "institution_id": "glq-people-gov",
+      "standard_name": "鼓楼区人民政府",
+      "administrative_level": "COUNTY",
+      "decision": "INCLUDE"
+    }
+  ],
+  "leadership": {
+    "structure_id": "ldr-gulou-reviewer-smoke",
+    "institution_id": "glq-people-gov",
+    "all_visible_leaders": [
+      { "person_name": "董涵", "visible_roles": ["区委副书记", "区长"] },
+      { "person_name": "石磊", "visible_roles": ["区委常委", "副区长"] }
+    ],
+    "official_order": ["董涵", "石磊"],
+    "party_head": null,
+    "administrative_head": "董涵",
+    "party_deputy_secretaries": ["董涵"],
+    "executive_deputies": ["董涵"],
+    "other_deputies": ["石磊"],
+    "vacancy_information": [],
+    "supporting_evidence_ids": ["evt-gulou-reviewer-1"],
+    "structure_complete": true,
+    "investigator_agent_id": "step9-fixture-agent",
+    "investigator_context_id": "step9-fixture-context",
+    "decided_at": "2026-08-14T00:00:00.000Z"
+  },
+  "selectedOfficials": [
+    {
+      "person_decision_id": "pd-gulou-primary1",
+      "person_id": "person-dong-han",
+      "target_id": "glq-target-primary1",
+      "institution_id": "glq-people-gov",
+      "primary_slot": "PRIMARY_1",
+      "leadership_structure_id": "ldr-gulou-reviewer-smoke",
+      "person_status": "PERSON_CONFIRMED",
+      "person_name": "董涵",
+      "role_canonical": "区长",
+      "selection_basis": "administrative head of the district government",
+      "rank_information": null,
+      "responsibility_description": null,
+      "currentness_quality": "CURRENT_COLLECTION_MEMBER",
+      "supporting_evidence_ids": ["evt-gulou-reviewer-1"],
+      "investigator_agent_id": "step9-fixture-agent",
+      "investigator_context_id": "step9-fixture-context",
+      "decided_at": "2026-08-14T00:00:00.000Z"
+    },
+    {
+      "person_decision_id": "pd-gulou-primary2",
+      "person_id": "person-shi-lei",
+      "target_id": "glq-target-primary2",
+      "institution_id": "glq-people-gov",
+      "primary_slot": "PRIMARY_2",
+      "leadership_structure_id": "ldr-gulou-reviewer-smoke",
+      "person_status": "PERSON_CONFIRMED",
+      "person_name": "石磊",
+      "role_canonical": "副区长",
+      "selection_basis": "executive deputy of the district government",
+      "rank_information": null,
+      "responsibility_description": null,
+      "currentness_quality": "CURRENT_COLLECTION_MEMBER",
+      "supporting_evidence_ids": ["evt-gulou-reviewer-1"],
+      "investigator_agent_id": "step9-fixture-agent",
+      "investigator_context_id": "step9-fixture-context",
+      "decided_at": "2026-08-14T00:00:00.000Z"
+    }
+  ],
+  "candidatePool": [
+    {
+      "candidate_id": "cand-gulou-p1-dh",
+      "target_id": "glq-target-primary1",
+      "evidence_id": "evt-gulou-reviewer-1",
+      "url": "http://www.njgl.gov.cn/xxgk/qczc/dh/",
+      "source_domain_class": "OFFICIAL_GOV_DOMAIN",
+      "page_shape_class": "OFFICIAL_CURRENT_LEADER_DETAIL",
+      "supports_person": true,
+      "supports_institution": true,
+      "supports_role": true,
+      "supports_currentness": true,
+      "candidate_status": "ACCEPTED_AS_FINAL",
+      "accept_or_reject_reason": "official district government leader profile page for PRIMARY_1",
+      "superseded_by_candidate_id": null
+    },
+    {
+      "candidate_id": "cand-gulou-p2-sl",
+      "target_id": "glq-target-primary2",
+      "evidence_id": "evt-gulou-reviewer-1",
+      "url": "http://www.njgl.gov.cn/xxgk/qczc/sl/",
+      "source_domain_class": "OFFICIAL_GOV_DOMAIN",
+      "page_shape_class": "OFFICIAL_CURRENT_LEADER_DETAIL",
+      "supports_person": true,
+      "supports_institution": true,
+      "supports_role": true,
+      "supports_currentness": true,
+      "candidate_status": "ACCEPTED_AS_FINAL",
+      "accept_or_reject_reason": "official district government leader profile page for PRIMARY_2",
+      "superseded_by_candidate_id": null
+    }
+  ]
+}
