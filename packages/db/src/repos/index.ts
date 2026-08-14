@@ -18,6 +18,8 @@ import { SiteProfileRepository } from "./site-profile.js";
 import { SearchCacheRepository } from "./search-cache.js";
 import { ToolEventRepository } from "./tool-event.js";
 import { InvestigatorEvidenceSubmissionRepository } from "./investigator-evidence.js";
+import { ReviewDecisionSubmissionRepository } from "./review-decision-submission.js";
+import { RecoverySubmissionRepository } from "./recovery-submission.js";
 
 /** 各 Repository 组合，便于业务层一次取用。 */
 export interface Repositories {
@@ -39,6 +41,8 @@ export interface Repositories {
   searchCache: SearchCacheRepository;
   toolEvent: ToolEventRepository;
   investigatorEvidence: InvestigatorEvidenceSubmissionRepository;
+  reviewDecisionSubmission: ReviewDecisionSubmissionRepository;
+  recoverySubmission: RecoverySubmissionRepository;
 }
 
 /** 创建全部 Repository。 */
@@ -62,6 +66,8 @@ export function createRepositories(db: Kysely<Database>): Repositories {
     searchCache: new SearchCacheRepository(db),
     toolEvent: new ToolEventRepository(db),
     investigatorEvidence: new InvestigatorEvidenceSubmissionRepository(db),
+    reviewDecisionSubmission: new ReviewDecisionSubmissionRepository(db),
+    recoverySubmission: new RecoverySubmissionRepository(db),
   };
 }
 
@@ -84,4 +90,6 @@ export {
   SearchCacheRepository,
   ToolEventRepository,
   InvestigatorEvidenceSubmissionRepository,
+  ReviewDecisionSubmissionRepository,
+  RecoverySubmissionRepository,
 };

@@ -27,6 +27,8 @@ import type {
   RuleVersionTable,
   ToolEventTable,
   InvestigatorEvidenceSubmissionTable,
+  ReviewDecisionSubmissionTable,
+  RecoverySubmissionTable,
 } from "./schema.js";
 import type { Selectable } from "kysely";
 
@@ -59,6 +61,8 @@ export type {
   RuleVersionTable,
   ToolEventTable,
   InvestigatorEvidenceSubmissionTable,
+  ReviewDecisionSubmissionTable,
+  RecoverySubmissionTable,
 } from "./schema.js";
 
 export { TABLE_NAMES } from "./schema.js";
@@ -91,3 +95,5 @@ export type RobotsCacheRow = Selectable<RobotsCacheTable>;
 export type RuleVersionRow = Selectable<RuleVersionTable>;
 export type ToolEventRow = Selectable<ToolEventTable>;
 export type InvestigatorEvidenceSubmissionRow = Selectable<InvestigatorEvidenceSubmissionTable>;
+export type ReviewDecisionSubmissionRow = Selectable<ReviewDecisionSubmissionTable>;
+export type RecoverySubmissionRow = Selectable<RecoverySubmissionTable>;

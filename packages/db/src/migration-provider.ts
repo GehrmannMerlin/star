@@ -3,6 +3,7 @@ import { MIGRATION_001_INITIAL } from "./migration-001-initial.js";
 import { MIGRATION_002_INVARIANTS } from "./migration-002-invariants.js";
 import { MIGRATION_003_TASK_OWNER } from "./migration-003-task-owner.js";
 import { MIGRATION_004_AGENT_PERSISTENCE } from "./migration-004-agent-persistence.js";
+import { MIGRATION_005_RECOVERY_REREVIEW_PERSISTENCE } from "./migration-005-recovery-rereview-persistence.js";
 
 /** 按文件顺序组织的迁移。 */
 export interface MigrationEntry {
@@ -15,6 +16,10 @@ export const MIGRATIONS: MigrationEntry[] = [
   { name: MIGRATION_002_INVARIANTS.name, migration: MIGRATION_002_INVARIANTS.migration },
   { name: MIGRATION_003_TASK_OWNER.name, migration: MIGRATION_003_TASK_OWNER.migration },
   { name: MIGRATION_004_AGENT_PERSISTENCE.name, migration: MIGRATION_004_AGENT_PERSISTENCE.migration },
+  {
+    name: MIGRATION_005_RECOVERY_REREVIEW_PERSISTENCE.name,
+    migration: MIGRATION_005_RECOVERY_REREVIEW_PERSISTENCE.migration,
+  },
 ];
 
 /**

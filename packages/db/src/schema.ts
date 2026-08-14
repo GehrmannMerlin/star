@@ -410,6 +410,55 @@ export interface InvestigatorEvidenceSubmissionTable extends BaseTable {
   frozen_at: string;
 }
 
+// ─────────────────────────── 复核持久层（STEP 14） ───────────────────────────
+
+/**
+ * Reviewer Decision Submission 冻结存储。唯一(packet_id, review_round)：同包同轮
+ * Review 只冻结一次（append-only），Round 1 不被 Round 2 覆盖。payload 只存 thin
+ * 传输载荷；完整 canonical Independent Review Record 由 runtime 现有边界构造。
+ */
+export interface ReviewDecisionSubmissionTable extends BaseTable {
+  packet_id: string;
+  review_round: number;
+  /** 逻辑身份（sink 在 session 建立前构造，可空）。 */
+  agent_session_id: string | null;
+  agent_role: string;
+  skill_name: string;
+  skill_version: string;
+  /** canonical schema 身份（review-record.schema.json）。 */
+  canonical_schema: string;
+  /** 冻结的 thin Review Decision payload（jsonb）。 */
+  payload: unknown;
+  /** 内容寻址哈希（sha256 over JSON）。 */
+  payload_hash: string;
+  /** APPROVED | REWORK_REQUIRED | REJECTED（确定性摘要）。 */
+  round_outcome: string;
+  /** 冻结时间。 */
+  frozen_at: string;
+}
+
+/** Recovery Supplement 冻结存储。唯一(packet_id, recovery_round) append-only，
+ *  Round 1 不可覆盖。Original Investigator Evidence 永不由此表写入/修改。 */
+export interface RecoverySubmissionTable extends BaseTable {
+  packet_id: string;
+  recovery_round: number;
+  /** 逻辑身份（sink 在 session 建立前构造，可空）。 */
+  agent_session_id: string | null;
+  agent_role: string;
+  skill_name: string;
+  skill_version: string;
+  /** canonical schema 身份（recovery-record.schema.json）。 */
+  canonical_schema: string;
+  /** 冻结的 thin Recovery Supplement payload（jsonb）。 */
+  payload: unknown;
+  /** 内容寻址哈希（sha256 over JSON）。 */
+  payload_hash: string;
+  /** RECOVERED | NO_QUALIFIED_URL | NEEDS_RECHECK（确定性摘要）。 */
+  round_outcome: string;
+  /** 冻结时间。 */
+  frozen_at: string;
+}
+
 /** 完整 Database 接口（Kysely）。 */
 export interface Database {
   task_run: TaskRunTable;
@@ -439,6 +488,8 @@ export interface Database {
   rule_version: RuleVersionTable;
   tool_event: ToolEventTable;
   investigator_evidence_submission: InvestigatorEvidenceSubmissionTable;
+  review_decision_submission: ReviewDecisionSubmissionTable;
+  recovery_submission: RecoverySubmissionTable;
 }
 
 /**
@@ -449,7 +500,7 @@ export type TaskRunRow = Selectable<TaskRunTable>;
 export type TargetScopeRow = Selectable<TargetScopeTable>;
 export type InstitutionSnapshotRow = Selectable<InstitutionSnapshotTable>;
 
-/** 27 张表的有序清单（迁移与完整性扫描共用）。 */
+/** 29 张表的有序清单（迁移与完整性扫描共用）。 */
 export const TABLE_NAMES = [
   "task_run",
   "target_scope",
@@ -478,4 +529,6 @@ export const TABLE_NAMES = [
   "rule_version",
   "tool_event",
   "investigator_evidence_submission",
+  "review_decision_submission",
+  "recovery_submission",
 ] as const;
