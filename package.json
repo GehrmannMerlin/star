@@ -27,7 +27,8 @@
     "agent:smoke:investigation": "pnpm --filter @stellaris/agent-runtime smoke:investigation",
     "agent:smoke:evidence": "pnpm --filter @stellaris/agent-runtime smoke:evidence",
     "agent:smoke:reviewer": "pnpm --filter @stellaris/agent-runtime smoke:reviewer",
-    "agent:smoke:recovery": "pnpm --filter @stellaris/agent-runtime smoke:recovery"
+    "agent:smoke:recovery": "pnpm --filter @stellaris/agent-runtime smoke:recovery",
+    "agent:smoke:rereview": "pnpm --filter @stellaris/agent-runtime smoke:rereview"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

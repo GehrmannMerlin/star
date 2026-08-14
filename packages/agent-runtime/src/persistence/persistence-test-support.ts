@@ -1,16 +1,24 @@
 /**
- * 持久化测试支撑：内存版 ToolEventRepository / InvestigatorEvidenceSubmissionRepository。
+ * 持久化测试支撑：内存版 ToolEventRepository / InvestigatorEvidenceSubmissionRepository
+ * / ReviewDecisionSubmissionRepository / RecoverySubmissionRepository。
  *
  * 用于在无容器环境下验证 journal/sink 的投影、冻结、重复拒绝与重读接线逻辑。
  * 通过 JSON.parse(JSON.stringify(...)) 模拟 pg 的 jsonb 序列化往返。
  */
 
-import type { InvestigatorEvidenceSubmissionRow, ToolEventRow } from "@stellaris/db";
+import type {
+  InvestigatorEvidenceSubmissionRow,
+  RecoverySubmissionRow,
+  ReviewDecisionSubmissionRow,
+  ToolEventRow,
+} from "@stellaris/db";
 import type {
   EvidenceSubmissionInsertRow,
   InvestigatorEvidenceSubmissionRepositoryPort,
 } from "./postgres-investigator-evidence-sink.js";
 import type { ToolEventRepositoryPort, ToolEventInsertRow } from "./postgres-tool-event-journal.js";
+import type { ReviewDecisionSubmissionRepositoryPort } from "./postgres-review-decision-sink.js";
+import type { RecoverySubmissionRepositoryPort } from "./postgres-recovery-submission-sink.js";
 
 /** 内存 ToolEvent 仓储，模拟 pg jsonb 往返与 seq 自增。 */
 export class FakeToolEventRepo implements ToolEventRepositoryPort {
@@ -71,7 +79,7 @@ export class FakeEvidenceRepo implements InvestigatorEvidenceSubmissionRepositor
   async insertSubmission(row: EvidenceSubmissionInsertRow): Promise<InvestigatorEvidenceSubmissionRow> {
     if (this.rows.some((r) => r.packet_id === row.packet_id)) {
       const error = new Error(
-        "duplicate key value violates unique constraint \"investigator_evidence_submission_packet_unique\"",
+        'duplicate key value violates unique constraint "investigator_evidence_submission_packet_unique"',
       ) as Error & { code: string };
       error.code = "23505";
       throw error;
@@ -103,6 +111,122 @@ export class FakeEvidenceRepo implements InvestigatorEvidenceSubmissionRepositor
 
   async isFrozen(packetId: string): Promise<boolean> {
     return this.rows.some((r) => r.packet_id === packetId);
+  }
+}
+
+/** 内存 Review Decision 仓储，模拟唯一约束 (packet_id, review_round) 与并发竞争。 */
+export class FakeReviewDecisionRepo implements ReviewDecisionSubmissionRepositoryPort {
+  rows: ReviewDecisionSubmissionRow[] = [];
+  raceMode = false;
+  private precheckCalls = 0;
+
+  async insertSubmission(
+    row: ReviewDecisionSubmissionRow,
+  ): Promise<ReviewDecisionSubmissionRow> {
+    if (
+      this.rows.some(
+        (r) => r.packet_id === row.packet_id && r.review_round === row.review_round,
+      )
+    ) {
+      const error = new Error(
+        'duplicate key value violates unique constraint "review_decision_submission_round_unique"',
+      ) as Error & { code: string };
+      error.code = "23505";
+      throw error;
+    }
+    const stored: ReviewDecisionSubmissionRow = {
+      ...JSON.parse(JSON.stringify(row)),
+      id: `rv-${this.rows.length + 1}`,
+      created_at: new Date().toISOString(),
+      payload: JSON.parse(JSON.stringify(row.payload)),
+    };
+    this.rows.push(stored);
+    return stored;
+  }
+
+  async getByPacketAndRound(
+    packetId: string,
+    reviewRound: number,
+  ): Promise<ReviewDecisionSubmissionRow | null> {
+    if (this.raceMode) {
+      this.precheckCalls += 1;
+      if (this.precheckCalls === 1) return null;
+    }
+    return (
+      this.rows.find(
+        (r) => r.packet_id === packetId && r.review_round === reviewRound,
+      ) ?? null
+    );
+  }
+
+  async listByPacket(packetId: string): Promise<ReviewDecisionSubmissionRow[]> {
+    return this.rows
+      .filter((r) => r.packet_id === packetId)
+      .sort((a, b) => a.review_round - b.review_round);
+  }
+
+  async latestByPacket(packetId: string): Promise<ReviewDecisionSubmissionRow | null> {
+    const matches = this.rows
+      .filter((r) => r.packet_id === packetId)
+      .sort((a, b) => b.review_round - a.review_round);
+    return matches[0] ?? null;
+  }
+}
+
+/** 内存 Recovery Submission 仓储，模拟唯一约束 (packet_id, recovery_round) 与并发竞争。 */
+export class FakeRecoveryRepo implements RecoverySubmissionRepositoryPort {
+  rows: RecoverySubmissionRow[] = [];
+  raceMode = false;
+  private precheckCalls = 0;
+
+  async insertSubmission(row: RecoverySubmissionRow): Promise<RecoverySubmissionRow> {
+    if (
+      this.rows.some(
+        (r) => r.packet_id === row.packet_id && r.recovery_round === row.recovery_round,
+      )
+    ) {
+      const error = new Error(
+        'duplicate key value violates unique constraint "recovery_submission_round_unique"',
+      ) as Error & { code: string };
+      error.code = "23505";
+      throw error;
+    }
+    const stored: RecoverySubmissionRow = {
+      ...JSON.parse(JSON.stringify(row)),
+      id: `rc-${this.rows.length + 1}`,
+      created_at: new Date().toISOString(),
+      payload: JSON.parse(JSON.stringify(row.payload)),
+    };
+    this.rows.push(stored);
+    return stored;
+  }
+
+  async getByPacketAndRound(
+    packetId: string,
+    recoveryRound: number,
+  ): Promise<RecoverySubmissionRow | null> {
+    if (this.raceMode) {
+      this.precheckCalls += 1;
+      if (this.precheckCalls === 1) return null;
+    }
+    return (
+      this.rows.find(
+        (r) => r.packet_id === packetId && r.recovery_round === recoveryRound,
+      ) ?? null
+    );
+  }
+
+  async listByPacket(packetId: string): Promise<RecoverySubmissionRow[]> {
+    return this.rows
+      .filter((r) => r.packet_id === packetId)
+      .sort((a, b) => a.recovery_round - b.recovery_round);
+  }
+
+  async latestByPacket(packetId: string): Promise<RecoverySubmissionRow | null> {
+    const matches = this.rows
+      .filter((r) => r.packet_id === packetId)
+      .sort((a, b) => b.recovery_round - a.recovery_round);
+    return matches[0] ?? null;
   }
 }
 
