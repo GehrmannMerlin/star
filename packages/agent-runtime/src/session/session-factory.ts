@@ -59,6 +59,7 @@ export class AgentSessionFactory {
   async createAgentSession(
     role: AgentRole,
     run: AgentRunRef = { taskRunId: "manual" },
+    opts: { tools?: readonly string[] } = {},
   ): Promise<AgentSessionFactoryResult> {
     const resolved = this.deps.modelPolicy.resolve(role);
     if (!resolved.ok) {
@@ -90,7 +91,9 @@ export class AgentSessionFactory {
     // role tool policy intersected with the registry, so the default coding
     // tools (read/bash/edit/write) stay disabled and each role only sees its
     // own tools. Gate: default coding tools = 0, role tools present.
-    const allowedToolNames = roleToolsFor(role).filter((name) => this.registry.has(name));
+    const allowedToolNames = (opts.tools ?? roleToolsFor(role)).filter((name) =>
+      this.registry.has(name),
+    );
 
     const sessionManager = SessionManager.inMemory();
     const createSession = this.deps.createSession ?? createAgentSession;

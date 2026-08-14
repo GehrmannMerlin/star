@@ -19,6 +19,8 @@ export type CreateAgentToolRegistryOptions = {
   submitInventoryTool?: AgentToolDefinition;
   /** Adds the submit_investigation tool (Investigator Agent only; wired by the runner). */
   submitInvestigationTool?: AgentToolDefinition;
+  /** Adds the submit_investigator_evidence tool (Investigator Evidence phase; wired by the runner). */
+  submitInvestigatorEvidenceTool?: AgentToolDefinition;
 };
 
 export function createAgentToolRegistry(
@@ -40,6 +42,9 @@ export function createAgentToolRegistry(
   }
   if (options.submitInvestigationTool) {
     tools.push(options.submitInvestigationTool);
+  }
+  if (options.submitInvestigatorEvidenceTool) {
+    tools.push(options.submitInvestigatorEvidenceTool);
   }
   return new ToolRegistry(tools);
 }

@@ -1,0 +1,74 @@
+{
+  "region_code": "320106",
+  "institution_id": "glq-people-gov",
+  "institution_name": "鼓楼区人民政府",
+  "administrative_level": "COUNTY",
+  "inventory": [
+    {
+      "institution_id": "glq-people-gov",
+      "standard_name": "鼓楼区人民政府",
+      "administrative_level": "COUNTY",
+      "decision": "INCLUDE"
+    }
+  ],
+  "leadership": {
+    "structure_id": "ldr-gulou-step9-fixture",
+    "institution_id": "glq-people-gov",
+    "all_visible_leaders": [
+      { "person_name": "王安伟", "visible_roles": ["区委书记"] },
+      { "person_name": "董涵", "visible_roles": ["区委副书记", "区长"] }
+    ],
+    "official_order": ["王安伟", "董涵"],
+    "party_head": "王安伟",
+    "administrative_head": "董涵",
+    "party_deputy_secretaries": ["董涵"],
+    "executive_deputies": ["董涵"],
+    "other_deputies": [],
+    "vacancy_information": [],
+    "supporting_evidence_ids": ["evt-gulou-step9-1"],
+    "structure_complete": true,
+    "investigator_agent_id": "step9-fixture-agent",
+    "investigator_context_id": "step9-fixture-context",
+    "decided_at": "2026-08-14T00:00:00.000Z"
+  },
+  "selectedOfficials": [
+    {
+      "person_decision_id": "pd-gulou-primary1",
+      "person_id": "person-wang-anwei",
+      "target_id": "glq-target-primary1",
+      "institution_id": "glq-people-gov",
+      "primary_slot": "PRIMARY_1",
+      "leadership_structure_id": "ldr-gulou-step9-fixture",
+      "person_status": "PERSON_CONFIRMED",
+      "person_name": "王安伟",
+      "role_canonical": "区委书记",
+      "selection_basis": "official order head of 鼓楼区 leadership",
+      "rank_information": null,
+      "responsibility_description": null,
+      "currentness_quality": "CURRENT_COLLECTION_MEMBER",
+      "supporting_evidence_ids": ["evt-gulou-step9-1"],
+      "investigator_agent_id": "step9-fixture-agent",
+      "investigator_context_id": "step9-fixture-context",
+      "decided_at": "2026-08-14T00:00:01.000Z"
+    },
+    {
+      "person_decision_id": "pd-gulou-primary2",
+      "person_id": "person-dong-han",
+      "target_id": "glq-target-primary2",
+      "institution_id": "glq-people-gov",
+      "primary_slot": "PRIMARY_2",
+      "leadership_structure_id": "ldr-gulou-step9-fixture",
+      "person_status": "PERSON_CONFIRMED",
+      "person_name": "董涵",
+      "role_canonical": "区委副书记、区长",
+      "selection_basis": "administrative head of 鼓楼区 government",
+      "rank_information": null,
+      "responsibility_description": null,
+      "currentness_quality": "CURRENT_COLLECTION_MEMBER",
+      "supporting_evidence_ids": ["evt-gulou-step9-1"],
+      "investigator_agent_id": "step9-fixture-agent",
+      "investigator_context_id": "step9-fixture-context",
+      "decided_at": "2026-08-14T00:00:02.000Z"
+    }
+  ]
+}

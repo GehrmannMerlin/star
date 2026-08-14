@@ -183,7 +183,7 @@ describe("InvestigatorAgentRunner", () => {
     expect(result.packet.state).toBe("FAILED");
   });
 
-  it("returns a frozen COMPLETED result and READY_FOR_REVIEW after a valid inspected submission", async () => {
+  it("returns a frozen COMPLETED result and EVIDENCE_PENDING after a valid inspected submission", async () => {
     const { store, packetId } = freshStore();
     const sink = new InMemoryInvestigationSubmissionSink();
     const eventSink = new MemoryToolEventSink();
@@ -207,7 +207,7 @@ describe("InvestigatorAgentRunner", () => {
     const result = await runner.run({ packetId });
     expect(result.status).toBe("COMPLETED");
     if (result.status !== "COMPLETED") return;
-    expect(result.packet.state).toBe("READY_FOR_REVIEW");
+    expect(result.packet.state).toBe("EVIDENCE_PENDING");
     expect(result.frozen).toBe(true);
     expect(result.observationGate.passed).toBe(true);
     expect(result.observationGate.fetchOrRenderSucceeded).toBe(true);

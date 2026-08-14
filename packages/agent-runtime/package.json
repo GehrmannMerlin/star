@@ -16,7 +16,8 @@
     "smoke:render": "tsx src/smoke/render-smoke.ts",
     "smoke:inspect": "tsx src/smoke/inspect-smoke.ts",
     "smoke:inventory": "tsx src/smoke/inventory-smoke.ts",
-    "smoke:investigation": "tsx src/smoke/investigation-smoke.ts"
+    "smoke:investigation": "tsx src/smoke/investigation-smoke.ts",
+    "smoke:evidence": "tsx src/smoke/evidence-smoke.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.1",

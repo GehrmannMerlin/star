@@ -52,7 +52,7 @@ describe("InMemoryInstitutionWorkPacketStore", () => {
     expect(packets.map((p) => p.institutionId)).toEqual(["glq-people-gov"]);
   });
 
-  it("transitions PENDING -> INVESTIGATING -> READY_FOR_REVIEW and stamps updatedAt", () => {
+  it("transitions PENDING -> INVESTIGATING -> EVIDENCE_PENDING -> EVIDENCE_GATHERING -> READY_FOR_REVIEW and stamps updatedAt", () => {
     const store = new InMemoryInstitutionWorkPacketStore();
     const packets = store.createFromFrozenInventory(FROZEN_INVENTORY);
     const packet = packets[0];
@@ -62,9 +62,23 @@ describe("InMemoryInstitutionWorkPacketStore", () => {
     });
     expect(investigating.state).toBe("INVESTIGATING");
     expect(investigating.investigatorSessionId).toBe("session-1");
+    const evidencePending = store.updateState(packet.packetId, "EVIDENCE_PENDING");
+    expect(evidencePending.state).toBe("EVIDENCE_PENDING");
+    expect(evidencePending.investigatorSessionId).toBe("session-1");
+    const gathering = store.updateState(packet.packetId, "EVIDENCE_GATHERING");
+    expect(gathering.state).toBe("EVIDENCE_GATHERING");
     const ready = store.updateState(packet.packetId, "READY_FOR_REVIEW");
     expect(ready.state).toBe("READY_FOR_REVIEW");
     expect(ready.investigatorSessionId).toBe("session-1");
+  });
+
+  it("rejects jumping from INVESTIGATING directly to READY_FOR_REVIEW", () => {
+    const store = new InMemoryInstitutionWorkPacketStore();
+    const packets = store.createFromFrozenInventory(FROZEN_INVENTORY);
+    const packet = packets[0];
+    if (!packet) throw new Error("test setup: expected an INCLUDE packet");
+    store.updateState(packet.packetId, "INVESTIGATING");
+    expect(() => store.updateState(packet.packetId, "READY_FOR_REVIEW")).toThrow(PacketStateError);
   });
 
   it("rejects a duplicate start (second INVESTIGATING transition)", () => {

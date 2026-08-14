@@ -75,7 +75,7 @@ export function investigationSmokePassed(report: Record<string, unknown>): boole
     report.primary_2_present === true &&
     report.primary_people_distinct === true &&
     report.submission_frozen === true &&
-    report.packet_final_state === "READY_FOR_REVIEW" &&
+    report.packet_final_state === "EVIDENCE_PENDING" &&
     report.agent_completed === true
   );
 }

@@ -27,6 +27,14 @@ export const INVESTIGATOR_ROLE_TOOLS = [
   "submit_investigation",
 ] as const;
 
+/** Tools the Investigator Agent may call during the Position Evidence phase
+ *  (submit_investigator_evidence is the output boundary). Same INVESTIGATOR
+ *  role; submit_investigation is intentionally not granted. */
+export const INVESTIGATOR_EVIDENCE_ROLE_TOOLS = [
+  ...BASE_AGENT_TOOLS,
+  "submit_investigator_evidence",
+] as const;
+
 export type RoleToolPolicy = Record<AgentRole, readonly string[]>;
 
 export const ROLE_TOOL_POLICY: RoleToolPolicy = {

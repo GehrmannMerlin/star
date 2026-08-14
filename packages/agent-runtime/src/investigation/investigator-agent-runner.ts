@@ -167,7 +167,9 @@ export class InvestigatorAgentRunner {
       return this.fail(request.packetId, "INVESTIGATION_NOT_SUBMITTED", agentSessionId, toolCalls);
     }
 
-    const completedPacket = this.deps.packetStore.updateState(request.packetId, "READY_FOR_REVIEW");
+    // Investigator phase done: Evidence (position URL candidates) still follows,
+    // so READY_FOR_REVIEW is only reached after the Evidence phase.
+    const completedPacket = this.deps.packetStore.updateState(request.packetId, "EVIDENCE_PENDING");
     return {
       status: "COMPLETED",
       packetId: request.packetId,

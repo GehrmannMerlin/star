@@ -38,7 +38,7 @@ describe("investigation smoke", () => {
       primary_2_present: true,
       primary_people_distinct: true,
       submission_frozen: true,
-      packet_final_state: "READY_FOR_REVIEW",
+      packet_final_state: "EVIDENCE_PENDING",
       agent_completed: true,
     };
     expect(investigationSmokePassed(base)).toBe(true);
