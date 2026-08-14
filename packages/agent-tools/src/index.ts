@@ -22,3 +22,5 @@ export * from "./tools/inspect/crawler-page-inspection-adapter.js";
 export * from "./tools/inspect/inspect-page.js";
 export * from "./tools/inventory/inventory-submission.js";
 export * from "./tools/inventory/submit-inventory.js";
+export * from "./tools/investigation/investigation-submission.js";
+export * from "./tools/investigation/submit-investigation.js";

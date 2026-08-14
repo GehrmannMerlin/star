@@ -11,7 +11,7 @@ export const INVENTORY_ROLE_TOOLS = [
   "submit_inventory",
 ] as const;
 
-/** Base tools shared by the other agent roles (future roles get their own policy). */
+/** Base tools shared by the other agent roles. */
 export const BASE_AGENT_TOOLS = [
   "fetch_page",
   "get_region_context",
@@ -20,11 +20,18 @@ export const BASE_AGENT_TOOLS = [
   "search_web",
 ] as const;
 
+/** Tools the Investigator Agent may call (submit_investigation is the output
+ *  boundary). submit_inventory stays Inventory-only. */
+export const INVESTIGATOR_ROLE_TOOLS = [
+  ...BASE_AGENT_TOOLS,
+  "submit_investigation",
+] as const;
+
 export type RoleToolPolicy = Record<AgentRole, readonly string[]>;
 
 export const ROLE_TOOL_POLICY: RoleToolPolicy = {
   INVENTORY: INVENTORY_ROLE_TOOLS,
-  INVESTIGATOR: BASE_AGENT_TOOLS,
+  INVESTIGATOR: INVESTIGATOR_ROLE_TOOLS,
   RECOVERY: BASE_AGENT_TOOLS,
   REVIEWER: BASE_AGENT_TOOLS,
 };

@@ -17,6 +17,8 @@ export type CreateAgentToolRegistryOptions = {
   inspectPageTool?: AgentToolDefinition;
   /** Adds the submit_inventory tool (Inventory Agent only; wired by the runner). */
   submitInventoryTool?: AgentToolDefinition;
+  /** Adds the submit_investigation tool (Investigator Agent only; wired by the runner). */
+  submitInvestigationTool?: AgentToolDefinition;
 };
 
 export function createAgentToolRegistry(
@@ -35,6 +37,9 @@ export function createAgentToolRegistry(
   ];
   if (options.submitInventoryTool) {
     tools.push(options.submitInventoryTool);
+  }
+  if (options.submitInvestigationTool) {
+    tools.push(options.submitInvestigationTool);
   }
   return new ToolRegistry(tools);
 }

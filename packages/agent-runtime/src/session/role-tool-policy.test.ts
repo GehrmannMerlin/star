@@ -19,4 +19,22 @@ describe("role tool policy", () => {
     // submit_inventory is Inventory-only.
     expect(roleToolsFor("INVESTIGATOR")).not.toContain("submit_inventory");
   });
+
+  it("grants the Investigator role the six business tools and no submit_inventory or coding tools", () => {
+    const investigatorTools = roleToolsFor("INVESTIGATOR");
+    expect([...investigatorTools]).toEqual([
+      "fetch_page",
+      "get_region_context",
+      "inspect_page",
+      "render_page",
+      "search_web",
+      "submit_investigation",
+    ]);
+    expect(investigatorTools).not.toContain("submit_inventory");
+    for (const forbidden of PI_DEFAULT_CODING_TOOLS) {
+      expect(investigatorTools).not.toContain(forbidden);
+    }
+    // submit_investigation is Investigator-only.
+    expect(roleToolsFor("INVENTORY")).not.toContain("submit_investigation");
+  });
 });
