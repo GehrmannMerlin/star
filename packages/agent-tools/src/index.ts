@@ -17,3 +17,6 @@ export * from "./tools/fetch/fetch-page.js";
 export * from "./tools/render/page-renderer.js";
 export * from "./tools/render/crawler-browser-adapter.js";
 export * from "./tools/render/render-page.js";
+export * from "./tools/inspect/page-inspection.js";
+export * from "./tools/inspect/crawler-page-inspection-adapter.js";
+export * from "./tools/inspect/inspect-page.js";

@@ -1,5 +1,6 @@
 import type { AgentToolDefinition } from "../contracts/tool-types.js";
 import { createFetchPageTool } from "../tools/fetch/fetch-page.js";
+import { createInspectPageTool } from "../tools/inspect/inspect-page.js";
 import { createRenderPageTool } from "../tools/render/render-page.js";
 import { createSearchWebTool } from "../tools/search/search-web.js";
 import { getRegionContextTool } from "../tools/region/get-region-context.js";
@@ -12,6 +13,8 @@ export type CreateAgentToolRegistryOptions = {
   fetchPageTool?: AgentToolDefinition;
   /** Override the render_page tool (e.g. a stubbed renderer in tests). */
   renderPageTool?: AgentToolDefinition;
+  /** Override the inspect_page tool (e.g. a stubbed inspector in tests). */
+  inspectPageTool?: AgentToolDefinition;
 };
 
 export function createAgentToolRegistry(
@@ -20,5 +23,6 @@ export function createAgentToolRegistry(
   const searchWeb = options.searchWebTool ?? createSearchWebTool();
   const fetchPage = options.fetchPageTool ?? createFetchPageTool();
   const renderPage = options.renderPageTool ?? createRenderPageTool();
-  return new ToolRegistry([getRegionContextTool, searchWeb, fetchPage, renderPage]);
+  const inspectPage = options.inspectPageTool ?? createInspectPageTool();
+  return new ToolRegistry([getRegionContextTool, searchWeb, fetchPage, renderPage, inspectPage]);
 }

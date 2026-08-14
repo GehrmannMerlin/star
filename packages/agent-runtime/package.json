@@ -13,7 +13,8 @@
     "smoke:deepseek": "tsx src/smoke/deepseek-smoke.ts",
     "smoke:search": "tsx src/smoke/search-smoke.ts",
     "smoke:fetch": "tsx src/smoke/fetch-smoke.ts",
-    "smoke:render": "tsx src/smoke/render-smoke.ts"
+    "smoke:render": "tsx src/smoke/render-smoke.ts",
+    "smoke:inspect": "tsx src/smoke/inspect-smoke.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.1",
