@@ -361,6 +361,55 @@ export interface RuleVersionTable extends BaseTable {
   rule_payload: string | null;
 }
 
+// ─────────────────────────── Agent 持久层（STEP 11） ───────────────────────────
+
+/**
+ * Tool Event 持久化日志。
+ * 只保存数据最小化后的投影元数据（URL 证明 / search 概要 / submit 概要），
+ * 绝不保存原始 HTML、检索 snippets 或任何 secret-like 载荷。
+ */
+export interface ToolEventTable extends BaseTable {
+  /** 追加序（int4），读取时的确定性顺序键。 */
+  seq: Generated<number>;
+  call_id: string;
+  tool_name: string;
+  /** STARTED | SUCCESS | FAILED | CANCELLED。 */
+  status: string;
+  agent_session_id: string;
+  /** 逻辑 packet 身份（不建 FK，Packet Store 仍 Deferred）。 */
+  packet_id: string | null;
+  agent_role: string;
+  task_run_id: string;
+  started_at: string;
+  finished_at: string | null;
+  failure_code: string | null;
+  failure_message: string | null;
+  failure_retryable: boolean | null;
+  /** URL 证明元数据（requestedUrl/finalUrl/url/statusCode/bytes，jsonb）。 */
+  url_metadata: unknown | null;
+  /** search_web 证明元数据（provider/resultCount，jsonb）。 */
+  search_metadata: unknown | null;
+  /** submit_investigator_evidence 证明元数据（payloadHash/candidateCount，jsonb）。 */
+  submission_metadata: unknown | null;
+}
+
+/** Investigator Evidence Submission 冻结存储。唯一(packet_id) 保证每包只冻结一次。 */
+export interface InvestigatorEvidenceSubmissionTable extends BaseTable {
+  packet_id: string;
+  agent_session_id: string;
+  agent_role: string;
+  skill_name: string;
+  skill_version: string;
+  /** canonical schema 身份（如 url-candidate-pool.schema.json）。 */
+  canonical_schema: string;
+  /** 规范 Evidence payload（url-candidate-pool / target-claim，jsonb）。 */
+  payload: unknown;
+  /** 内容寻址哈希（sha256 over JSON）。 */
+  payload_hash: string;
+  /** 冻结时间。 */
+  frozen_at: string;
+}
+
 /** 完整 Database 接口（Kysely）。 */
 export interface Database {
   task_run: TaskRunTable;
@@ -388,6 +437,8 @@ export interface Database {
   search_result_cache: SearchResultCacheTable;
   robots_cache: RobotsCacheTable;
   rule_version: RuleVersionTable;
+  tool_event: ToolEventTable;
+  investigator_evidence_submission: InvestigatorEvidenceSubmissionTable;
 }
 
 /**
@@ -398,7 +449,7 @@ export type TaskRunRow = Selectable<TaskRunTable>;
 export type TargetScopeRow = Selectable<TargetScopeTable>;
 export type InstitutionSnapshotRow = Selectable<InstitutionSnapshotTable>;
 
-/** 25 张表的有序清单（迁移与完整性扫描共用）。 */
+/** 27 张表的有序清单（迁移与完整性扫描共用）。 */
 export const TABLE_NAMES = [
   "task_run",
   "target_scope",
@@ -425,4 +476,6 @@ export const TABLE_NAMES = [
   "search_result_cache",
   "robots_cache",
   "rule_version",
+  "tool_event",
+  "investigator_evidence_submission",
 ] as const;

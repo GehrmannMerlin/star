@@ -25,6 +25,8 @@ import type {
   SearchResultCacheTable,
   RobotsCacheTable,
   RuleVersionTable,
+  ToolEventTable,
+  InvestigatorEvidenceSubmissionTable,
 } from "./schema.js";
 import type { Selectable } from "kysely";
 
@@ -55,6 +57,8 @@ export type {
   SearchResultCacheTable,
   RobotsCacheTable,
   RuleVersionTable,
+  ToolEventTable,
+  InvestigatorEvidenceSubmissionTable,
 } from "./schema.js";
 
 export { TABLE_NAMES } from "./schema.js";
@@ -85,3 +89,5 @@ export type PublicApiProfileRow = Selectable<PublicApiProfileTable>;
 export type SearchResultCacheRow = Selectable<SearchResultCacheTable>;
 export type RobotsCacheRow = Selectable<RobotsCacheTable>;
 export type RuleVersionRow = Selectable<RuleVersionTable>;
+export type ToolEventRow = Selectable<ToolEventTable>;
+export type InvestigatorEvidenceSubmissionRow = Selectable<InvestigatorEvidenceSubmissionTable>;

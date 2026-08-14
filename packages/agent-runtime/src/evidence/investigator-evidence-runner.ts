@@ -202,7 +202,7 @@ export class InvestigatorEvidenceRunner {
     // Runtime per-candidate provenance gate: search snippets alone never count.
     // The packet may reach READY_FOR_REVIEW only when every candidate URL was
     // really opened (fetch/render SUCCESS) and really inspected.
-    const provenance = evaluateEvidenceProvenance(eventSink, submission.candidates);
+    const provenance = evaluateEvidenceProvenance(eventSink.successes, submission.candidates);
     if (!provenance.passed) {
       return this.fail(
         request.packetId,

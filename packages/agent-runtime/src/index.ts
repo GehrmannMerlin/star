@@ -23,6 +23,7 @@ export * from "./evidence/skill-evidence-validator.js";
 export * from "./evidence/investigator-evidence-submission-sink.js";
 export * from "./evidence/evidence-provenance.js";
 export * from "./evidence/investigator-evidence-runner.js";
+export * from "./persistence/index.js";
 export * from "./doctor/runtime-doctor.js";
 export * from "./smoke/deepseek-smoke.js";
 export * from "./smoke/search-smoke.js";

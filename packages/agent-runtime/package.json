@@ -22,6 +22,7 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.1",
     "@stellaris/agent-tools": "workspace:*",
+    "@stellaris/db": "workspace:*",
     "@stellaris/contracts": "workspace:*",
     "@stellaris/crawler": "workspace:*",
     "yaml": "2.9.0",

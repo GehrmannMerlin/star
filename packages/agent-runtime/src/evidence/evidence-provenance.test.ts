@@ -39,7 +39,7 @@ describe("evaluateEvidenceProvenance", () => {
   it("rejects a candidate that only ever appeared in a search result (no open, no inspect)", () => {
     const sink = new MemoryToolEventSink();
     sink.successes.push(successEvent("search_web", { provider: "bocha" }));
-    const gate = evaluateEvidenceProvenance(sink, [candidateRow(TARGET, URL)]);
+    const gate = evaluateEvidenceProvenance(sink.successes, [candidateRow(TARGET, URL)]);
     expect(gate.passed).toBe(false);
     expect(gate.candidates[0]?.opened).toBe(false);
     expect(gate.candidates[0]?.inspected).toBe(false);
@@ -49,7 +49,7 @@ describe("evaluateEvidenceProvenance", () => {
     const sink = new MemoryToolEventSink();
     sink.successes.push(successEvent("fetch_page", { requestedUrl: URL, finalUrl: URL }));
     sink.successes.push(successEvent("inspect_page", { url: URL }));
-    const gate = evaluateEvidenceProvenance(sink, [candidateRow(TARGET, URL)]);
+    const gate = evaluateEvidenceProvenance(sink.successes, [candidateRow(TARGET, URL)]);
     expect(gate.passed).toBe(true);
     expect(gate.candidates[0]?.opened).toBe(true);
     expect(gate.candidates[0]?.inspected).toBe(true);
@@ -60,7 +60,7 @@ describe("evaluateEvidenceProvenance", () => {
     const OLD_URL = "https://www.njgl.gov.cn/old/1.html";
     sink.successes.push(successEvent("fetch_page", { requestedUrl: OLD_URL, finalUrl: URL }));
     sink.successes.push(successEvent("inspect_page", { url: URL }));
-    const gate = evaluateEvidenceProvenance(sink, [candidateRow(TARGET, URL)]);
+    const gate = evaluateEvidenceProvenance(sink.successes, [candidateRow(TARGET, URL)]);
     expect(gate.passed).toBe(true);
   });
 
@@ -69,7 +69,7 @@ describe("evaluateEvidenceProvenance", () => {
     sink.successes.push(successEvent("fetch_page", { requestedUrl: URL, finalUrl: URL }));
     // inspect for the second candidate only
     sink.successes.push(successEvent("inspect_page", { url: "https://www.njgl.gov.cn/zfxxgk/ldzc/2.html" }));
-    const gate = evaluateEvidenceProvenance(sink, [
+    const gate = evaluateEvidenceProvenance(sink.successes, [
       candidateRow(TARGET, URL),
       candidateRow("glq-target-primary2", "https://www.njgl.gov.cn/zfxxgk/ldzc/2.html"),
     ]);
