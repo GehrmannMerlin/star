@@ -10,6 +10,7 @@ import type {
   InvestigatorEvidenceSubmissionRow,
   RecoverySubmissionRow,
   ReviewDecisionSubmissionRow,
+  InstitutionWorkPacketRow,
   ToolEventRow,
 } from "@stellaris/db";
 import type {
@@ -19,6 +20,7 @@ import type {
 import type { ToolEventRepositoryPort, ToolEventInsertRow } from "./postgres-tool-event-journal.js";
 import type { ReviewDecisionSubmissionRepositoryPort } from "./postgres-review-decision-sink.js";
 import type { RecoverySubmissionRepositoryPort } from "./postgres-recovery-submission-sink.js";
+import type { InstitutionWorkPacketRepositoryPort } from "../work-packet/institution-work-packet.js";
 
 /** 内存 ToolEvent 仓储，模拟 pg jsonb 往返与 seq 自增。 */
 export class FakeToolEventRepo implements ToolEventRepositoryPort {
@@ -227,6 +229,80 @@ export class FakeRecoveryRepo implements RecoverySubmissionRepositoryPort {
       .filter((r) => r.packet_id === packetId)
       .sort((a, b) => b.recovery_round - a.recovery_round);
     return matches[0] ?? null;
+  }
+}
+
+/** 内存 Packet 仓储，模拟 PK（packet_id）唯一性与增改读。 */
+export class FakePacketRepo implements InstitutionWorkPacketRepositoryPort {
+  rows = new Map<string, InstitutionWorkPacketRow>();
+
+  async insert(row: InstitutionWorkPacketRow): Promise<InstitutionWorkPacketRow> {
+    if (this.rows.has(row.packet_id)) {
+      const error = new Error(
+        "duplicate key value violates unique constraint \"institution_work_packet_pkey\"",
+      ) as Error & { code: string };
+      error.code = "23505";
+      throw error;
+    }
+    const stored = { ...JSON.parse(JSON.stringify(row)) };
+    this.rows.set(stored.packet_id, stored);
+    return stored;
+  }
+
+  async getByPacketId(packetId: string): Promise<InstitutionWorkPacketRow | null> {
+    return this.rows.get(packetId) ?? null;
+  }
+
+  async list(): Promise<InstitutionWorkPacketRow[]> {
+    return [...this.rows.values()];
+  }
+
+  async updatePacket(
+    packetId: string,
+    patch: {
+      state?: string;
+      investigatorSessionId?: string | null;
+      failureCode?: string | null;
+      updatedAt: string;
+    },
+  ): Promise<InstitutionWorkPacketRow> {
+    const current = this.rows.get(packetId);
+    if (!current) throw new Error("packet not found: " + packetId);
+    const updated = {
+      ...current,
+      ...(patch.state !== undefined ? { state: patch.state } : {}),
+      ...(patch.investigatorSessionId !== undefined
+        ? { investigator_session_id: patch.investigatorSessionId }
+        : {}),
+      ...(patch.failureCode !== undefined ? { failure_code: patch.failureCode } : {}),
+      updated_at: patch.updatedAt,
+    };
+    this.rows.set(packetId, updated);
+    return updated;
+  }
+
+  async updatePrimaryPersons(
+    packetId: string,
+    patch: {
+      primary1: { targetId: string | null; personId: string | null; personName: string | null };
+      primary2: { targetId: string | null; personId: string | null; personName: string | null };
+      updatedAt: string;
+    },
+  ): Promise<InstitutionWorkPacketRow> {
+    const current = this.rows.get(packetId);
+    if (!current) throw new Error("packet not found: " + packetId);
+    const updated = {
+      ...current,
+      primary1_target_id: patch.primary1.targetId,
+      primary1_person_id: patch.primary1.personId,
+      primary1_person_name: patch.primary1.personName,
+      primary2_target_id: patch.primary2.targetId,
+      primary2_person_id: patch.primary2.personId,
+      primary2_person_name: patch.primary2.personName,
+      updated_at: patch.updatedAt,
+    };
+    this.rows.set(packetId, updated);
+    return updated;
   }
 }
 

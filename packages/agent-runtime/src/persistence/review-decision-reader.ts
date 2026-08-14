@@ -11,6 +11,8 @@ export type ReviewDecisionHistoryRow = {
   /** APPROVED | REWORK_REQUIRED | REJECTED（确定性摘要）。 */
   roundOutcome: string;
   frozenAt: string;
+  /** 来源 Review 的持久化行 id（review_decision_submission.id）。 */
+  sourceReviewId: string;
 };
 
 /** 从 latest frozen APPROVED Review 推导出的当前岗位终选（无第二套 SSoT）。 */
@@ -28,6 +30,7 @@ function toHistoryRow(row: ReviewDecisionSubmissionRow): ReviewDecisionHistoryRo
     payloadHash: row.payload_hash,
     roundOutcome: row.round_outcome,
     frozenAt: row.frozen_at,
+    sourceReviewId: row.id,
   };
 }
 

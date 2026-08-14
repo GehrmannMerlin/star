@@ -459,6 +459,33 @@ export interface RecoverySubmissionTable extends BaseTable {
   frozen_at: string;
 }
 
+
+/** Persistent Institution Work Packet（STEP 15）。只存编排/状态 identity 与两个
+ *  PRIMARY 人员的身份；Leadership / Candidate Pool / Review / Recovery 载荷
+ *  各自已有 SSoT，不在此表重复存储。 */
+export interface InstitutionWorkPacketTable {
+  packet_id: string;
+  inventory_hash: string;
+  region_code: string | null;
+  institution_id: string;
+  institution_name: string;
+  administrative_level: string;
+  institution_type: string | null;
+  /** PACKET_STATES 枚举摘要（agent-runtime 状态机）。 */
+  state: string;
+  attempt_no: Generated<number>;
+  investigator_session_id: string | null;
+  failure_code: string | null;
+  primary1_target_id: string | null;
+  primary1_person_id: string | null;
+  primary1_person_name: string | null;
+  primary2_target_id: string | null;
+  primary2_person_id: string | null;
+  primary2_person_name: string | null;
+  created_at: Generated<string>;
+  updated_at: Generated<string>;
+}
+
 /** 完整 Database 接口（Kysely）。 */
 export interface Database {
   task_run: TaskRunTable;
@@ -490,6 +517,7 @@ export interface Database {
   investigator_evidence_submission: InvestigatorEvidenceSubmissionTable;
   review_decision_submission: ReviewDecisionSubmissionTable;
   recovery_submission: RecoverySubmissionTable;
+  institution_work_packet: InstitutionWorkPacketTable;
 }
 
 /**
@@ -531,4 +559,5 @@ export const TABLE_NAMES = [
   "investigator_evidence_submission",
   "review_decision_submission",
   "recovery_submission",
+  "institution_work_packet",
 ] as const;

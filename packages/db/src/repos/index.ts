@@ -20,6 +20,7 @@ import { ToolEventRepository } from "./tool-event.js";
 import { InvestigatorEvidenceSubmissionRepository } from "./investigator-evidence.js";
 import { ReviewDecisionSubmissionRepository } from "./review-decision-submission.js";
 import { RecoverySubmissionRepository } from "./recovery-submission.js";
+import { InstitutionWorkPacketRepository } from "./institution-work-packet.js";
 
 /** 各 Repository 组合，便于业务层一次取用。 */
 export interface Repositories {
@@ -43,6 +44,7 @@ export interface Repositories {
   investigatorEvidence: InvestigatorEvidenceSubmissionRepository;
   reviewDecisionSubmission: ReviewDecisionSubmissionRepository;
   recoverySubmission: RecoverySubmissionRepository;
+  institutionWorkPacket: InstitutionWorkPacketRepository;
 }
 
 /** 创建全部 Repository。 */
@@ -68,6 +70,7 @@ export function createRepositories(db: Kysely<Database>): Repositories {
     investigatorEvidence: new InvestigatorEvidenceSubmissionRepository(db),
     reviewDecisionSubmission: new ReviewDecisionSubmissionRepository(db),
     recoverySubmission: new RecoverySubmissionRepository(db),
+    institutionWorkPacket: new InstitutionWorkPacketRepository(db),
   };
 }
 
@@ -92,4 +95,5 @@ export {
   InvestigatorEvidenceSubmissionRepository,
   ReviewDecisionSubmissionRepository,
   RecoverySubmissionRepository,
+  InstitutionWorkPacketRepository,
 };
