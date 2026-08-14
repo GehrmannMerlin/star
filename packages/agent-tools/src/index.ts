@@ -20,3 +20,5 @@ export * from "./tools/render/render-page.js";
 export * from "./tools/inspect/page-inspection.js";
 export * from "./tools/inspect/crawler-page-inspection-adapter.js";
 export * from "./tools/inspect/inspect-page.js";
+export * from "./tools/inventory/inventory-submission.js";
+export * from "./tools/inventory/submit-inventory.js";

@@ -14,14 +14,16 @@
     "smoke:search": "tsx src/smoke/search-smoke.ts",
     "smoke:fetch": "tsx src/smoke/fetch-smoke.ts",
     "smoke:render": "tsx src/smoke/render-smoke.ts",
-    "smoke:inspect": "tsx src/smoke/inspect-smoke.ts"
+    "smoke:inspect": "tsx src/smoke/inspect-smoke.ts",
+    "smoke:inventory": "tsx src/smoke/inventory-smoke.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.1",
     "@stellaris/agent-tools": "workspace:*",
     "@stellaris/contracts": "workspace:*",
     "@stellaris/crawler": "workspace:*",
-    "yaml": "2.9.0"
+    "yaml": "2.9.0",
+    "ajv": "8.20.0"
   },
   "devDependencies": {
     "@types/node": "26.1.2",

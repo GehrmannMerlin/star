@@ -52,6 +52,7 @@ describe("Pi custom tool adapter", () => {
     expect(customTools.map((tool) => tool.name)).toEqual([
       "fetch_page",
       "get_region_context",
+      "inspect_page",
       "render_page",
       "search_web",
     ]);

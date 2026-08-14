@@ -25,13 +25,14 @@ describe("RuntimeDoctor", () => {
     expect(result.production_coding_tools.tools).toEqual([]);
   });
 
-  it("reports the generic tool gateway with all four custom tools", async () => {
+  it("reports the generic tool gateway with all five custom tools", async () => {
     const result = await runDoctor();
     expect(result.tool_gateway.status).toBe("OK");
-    expect(result.tool_gateway.registered_tools).toBe(4);
+    expect(result.tool_gateway.registered_tools).toBe(5);
     expect(result.tool_gateway.tools).toEqual([
       "fetch_page",
       "get_region_context",
+      "inspect_page",
       "render_page",
       "search_web",
     ]);

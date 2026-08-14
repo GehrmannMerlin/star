@@ -15,6 +15,7 @@ import type { AgentRole } from "../model/model-types.js";
 import { MODEL_NOT_CONFIGURED, ModelPolicy } from "../model/model-policy.js";
 import { MODEL_NOT_FOUND, PiModelResolver } from "../model/pi-model-resolver.js";
 import { createPiCustomTools, type ToolInvocationContextFactory } from "./pi-tool-adapter.js";
+import { roleToolsFor } from "./role-tool-policy.js";
 import type { AgentSessionFactoryResult } from "./session-types.js";
 
 /** Identity of the run that owns the session (used in tool invocation context). */
@@ -39,7 +40,7 @@ export type AgentSessionFactoryDeps = {
  *
  * Wiring: ModelPolicy resolves the server-configured model, PiModelResolver
  * turns it into a Pi Model, and the session is built with:
- *   - tools: <custom-tool allowlist> (default Pi coding tools stay disabled)
+ *   - tools: <role tool allowlist> (default Pi coding tools stay disabled)
  *   - customTools                    (only ToolGateway-backed custom tools)
  *   - resourceLoader                 (so the Skill is loaded through Pi's loader)
  *   - in-memory session manager      (no persistence this phase)
@@ -85,11 +86,11 @@ export class AgentSessionFactory {
     const customTools = createPiCustomTools(this.registry, this.gateway, createContext);
 
     // Pi only activates a tool when its name appears in the `tools` allowlist
-    // (probed: `tools: []` disables even custom tools). The allowlist is built
-    // from the custom tool registry, so the default coding tools
-    // (read/bash/edit/write) stay disabled while get_region_context stays
-    // callable. Gate: default coding tools = 0, custom tool present.
-    const allowedToolNames = this.registry.list().map((tool) => tool.name);
+    // (probed: `tools: []` disables even custom tools). The allowlist is the
+    // role tool policy intersected with the registry, so the default coding
+    // tools (read/bash/edit/write) stay disabled and each role only sees its
+    // own tools. Gate: default coding tools = 0, role tools present.
+    const allowedToolNames = roleToolsFor(role).filter((name) => this.registry.has(name));
 
     const sessionManager = SessionManager.inMemory();
     const createSession = this.deps.createSession ?? createAgentSession;

@@ -15,6 +15,8 @@ export type CreateAgentToolRegistryOptions = {
   renderPageTool?: AgentToolDefinition;
   /** Override the inspect_page tool (e.g. a stubbed inspector in tests). */
   inspectPageTool?: AgentToolDefinition;
+  /** Adds the submit_inventory tool (Inventory Agent only; wired by the runner). */
+  submitInventoryTool?: AgentToolDefinition;
 };
 
 export function createAgentToolRegistry(
@@ -24,5 +26,15 @@ export function createAgentToolRegistry(
   const fetchPage = options.fetchPageTool ?? createFetchPageTool();
   const renderPage = options.renderPageTool ?? createRenderPageTool();
   const inspectPage = options.inspectPageTool ?? createInspectPageTool();
-  return new ToolRegistry([getRegionContextTool, searchWeb, fetchPage, renderPage, inspectPage]);
+  const tools: AgentToolDefinition[] = [
+    getRegionContextTool,
+    searchWeb,
+    fetchPage,
+    renderPage,
+    inspectPage,
+  ];
+  if (options.submitInventoryTool) {
+    tools.push(options.submitInventoryTool);
+  }
+  return new ToolRegistry(tools);
 }

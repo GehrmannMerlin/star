@@ -25,7 +25,13 @@ const fakeSession = {
   sessionManager: { getSessionId: () => "session-test" },
 };
 
-const ALLOWLIST = ["fetch_page", "get_region_context", "render_page", "search_web"];
+const ALLOWLIST = [
+  "fetch_page",
+  "get_region_context",
+  "inspect_page",
+  "render_page",
+  "search_web",
+];
 
 describe("AgentSessionFactory", () => {
   it("fails closed with MODEL_NOT_CONFIGURED when no model is configured", async () => {
@@ -86,6 +92,47 @@ describe("AgentSessionFactory", () => {
     expect(captured?.model).toBeDefined();
     expect(captured?.resourceLoader).toBe(stubLoader);
     expect(captured?.sessionManager).toBeDefined();
+  });
+
+  it("gives the INVENTORY role the six-tool allowlist when submit_inventory is registered", async () => {
+    let captured: CreateAgentSessionOptions | undefined;
+    const registry = createAgentToolRegistry({
+      submitInventoryTool: {
+        name: "submit_inventory",
+        description: "stub",
+        inputSchema: {} as never,
+        async execute() {
+          return { status: "ACCEPTED", frozen: true, itemCount: 0, payloadHash: "h" };
+        },
+      },
+    });
+    const factory = new AgentSessionFactory({
+      modelPolicy: new ModelPolicy(() => ({ provider: "deepseek", model: "deepseek-v4-pro" })),
+      modelResolver: await PiModelResolver.create(),
+      resourceLoader: stubLoader,
+      gateway: new ToolGateway(registry),
+      registry,
+      createSession: async (options) => {
+        captured = options;
+        return { session: fakeSession as never, extensionsResult: {} as never };
+      },
+    });
+
+    const result = await factory.createAgentSession("INVENTORY");
+    expect(result.status).toBe("READY");
+    if (result.status !== "READY") return;
+
+    expect(captured?.tools).toEqual([
+      "fetch_page",
+      "get_region_context",
+      "inspect_page",
+      "render_page",
+      "search_web",
+      "submit_inventory",
+    ]);
+    for (const forbidden of PI_DEFAULT_CODING_TOOLS) {
+      expect(captured?.tools).not.toContain(forbidden);
+    }
   });
 
   it("locks production default coding tools to empty", () => {
