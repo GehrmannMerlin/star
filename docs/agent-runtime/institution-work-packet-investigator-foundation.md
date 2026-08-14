@@ -16,7 +16,7 @@ Frozen Inventory
 → submit_investigation
 → canonical Skill schema validation + runtime Observation Gate
 → in-memory freeze
-→ packet READY_FOR_REVIEW
+→ packet EVIDENCE_PENDING
 ```
 
 Exactly one Institution Packet is investigated per run. No Reviewer, no Recovery, no
@@ -45,6 +45,10 @@ PENDING
   ↓ (Investigator session ready)
 INVESTIGATING
   ↓ (valid submit + Observation Gate PASS + schema PASS)
+EVIDENCE_PENDING
+  ↓ (STEP 10 Position Evidence phase)
+EVIDENCE_GATHERING
+  ↓ (valid evidence submit + Candidate Provenance Gate PASS)
 READY_FOR_REVIEW
 ```
 
@@ -54,14 +58,17 @@ Failures keep the packet (never deleted):
 INVESTIGATING → FAILED  (failureCode INVESTIGATION_NOT_SUBMITTED | INVESTIGATION_OBSERVATION_REQUIRED)
 PENDING       → CANCELLED
 INVESTIGATING → CANCELLED
+EVIDENCE_PENDING / EVIDENCE_GATHERING → CANCELLED
 ```
 
 Transitions are fail-closed (`PacketStateError` on any other move). Starting a run on a
 packet that is not `PENDING` returns `PACKET_ALREADY_STARTED` — two Investigator sessions on
 one packet are impossible.
 
-`READY_FOR_REVIEW` means the **Investigator phase** is complete — NOT final business
-completion. Evidence, Recovery, Reviewer and the final decision gate still follow.
+`EVIDENCE_PENDING` means the **Investigator phase** is complete — NOT final business
+completion. `READY_FOR_REVIEW` is reached only after the Position Evidence phase (STEP 10)
+freezes a validated candidate pool. Recovery, Reviewer and the final decision gate still
+follow.
 
 ## Investigator Role
 
@@ -127,7 +134,7 @@ The runner does not trust the Agent's claim that pages were opened. On completio
 
 A search snippet alone never forms a PRIMARY. If `submit_investigation` was called but the
 gate fails, the runner returns `FAILED` / `INVESTIGATION_OBSERVATION_REQUIRED` (packet stays
-`FAILED`); the packet only reaches `READY_FOR_REVIEW` with the gate PASS.
+`FAILED`); the packet only reaches `EVIDENCE_PENDING` with the gate PASS.
 
 ## In-memory Freeze
 
@@ -137,11 +144,11 @@ the submission and tool events live only in memory for the run's lifetime.
 
 ## Deferred
 
-- Position URL Candidate pipeline (`url_candidate_pool` / final URL decision)
+- Position URL Candidate pipeline (`url_candidate_pool` / final URL decision) — STEP 10
 - Persistent Evidence / persistent tool events
 - Recovery Agent
 - Reviewer Agent
 - PostgreSQL packet / submission store
 - Graphile packet scheduling
 
-These are planned separately (STEP 10+). The Skill itself is unchanged (3.1.0).
+The Skill itself is unchanged (3.1.0).
