@@ -141,4 +141,45 @@ describe("InventoryAgentRunner", () => {
     const result = await runner.run({ regionCode: "999999", mode: "TARGETED", specifiedInstitutions: ["x"] });
     expect(result.status).toBe("INVALID_REQUEST");
   });
+
+  it("runs a FULL request (regionCode only) and freezes a submitted inventory", async () => {
+    const sink = new InMemoryInventorySubmissionSink();
+    const runner = new InventoryAgentRunner({
+      skillRuntime: stubSkillRuntime,
+      modelPolicy: new ModelPolicy(() => ({ provider: "deepseek", model: "deepseek-v4-pro" })),
+      modelResolver: await PiModelResolver.create(),
+      sink,
+      validator: stubValidator,
+      createSession: async () => ({
+        session: fakeSession(async () => {
+          await sink.submit(VALID_INVENTORY);
+        }) as never,
+        extensionsResult: {} as never,
+      }),
+    });
+    const result = await runner.run({ regionCode: "320106", mode: "FULL" });
+    expect(result.status).toBe("COMPLETED");
+    if (result.status !== "COMPLETED") return;
+    expect(result.mode).toBe("FULL");
+    expect(result.regionCode).toBe("320106");
+    expect(result.frozen).toBe(true);
+    expect(result.inventory).toHaveLength(1);
+    expect(result.receipt.itemCount).toBe(1);
+  });
+
+  it("returns INVENTORY_NOT_SUBMITTED for a FULL request when the session never submits", async () => {
+    const runner = new InventoryAgentRunner({
+      skillRuntime: stubSkillRuntime,
+      modelPolicy: new ModelPolicy(() => ({ provider: "deepseek", model: "deepseek-v4-pro" })),
+      modelResolver: await PiModelResolver.create(),
+      sink: new InMemoryInventorySubmissionSink(),
+      validator: stubValidator,
+      createSession: async () => ({
+        session: fakeSession(async () => {}) as never,
+        extensionsResult: {} as never,
+      }),
+    });
+    const result = await runner.run({ regionCode: "320106", mode: "FULL" });
+    expect(result.status).toBe("INVENTORY_NOT_SUBMITTED");
+  });
 });

@@ -48,6 +48,8 @@ export type InventoryAgentRunnerDeps = {
   eventSink?: MemoryToolEventSink;
   /** Dev-smoke-only hints (seed URL). NEVER part of the business request. */
   devHints?: InventoryPromptDevHints;
+  /** Dev-smoke-only budget: abort the Pi session on this signal. NEVER part of the business request. */
+  abortSignal?: AbortSignal;
 };
 
 /**
@@ -114,7 +116,25 @@ export class InventoryAgentRunner {
     }
     const { session, agentSessionId } = created;
 
-    await session.prompt(buildInventoryRolePrompt(request, region.name, this.deps.devHints));
+    const promptText = buildInventoryRolePrompt(request, region.name, this.deps.devHints);
+    if (this.deps.abortSignal) {
+      // Dev-smoke budget: abort the Pi session when the caller's signal fires.
+      // An aborted run is not a runner failure — fall through to the freeze
+      // check (INVENTORY_NOT_SUBMITTED unless a submission already landed).
+      const onAbort = () => {
+        void session.abort();
+      };
+      this.deps.abortSignal.addEventListener("abort", onAbort, { once: true });
+      try {
+        await session.prompt(promptText);
+      } catch (error) {
+        if (!this.deps.abortSignal.aborted) throw error;
+      } finally {
+        this.deps.abortSignal.removeEventListener("abort", onAbort);
+      }
+    } else {
+      await session.prompt(promptText);
+    }
 
     const inventoryFrozen = await sink.isFrozen();
     const toolCalls = summarizeToolCalls(eventSink, inventoryFrozen);

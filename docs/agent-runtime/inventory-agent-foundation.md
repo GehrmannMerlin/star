@@ -95,7 +95,7 @@ deferred because the Bocha credential is currently pending (`BOCHA_API_KEY`).
 
 ## Deferred
 
-- real FULL inventory discovery smoke (needs Bocha credential)
+- ~~real FULL inventory discovery smoke (needs Bocha credential)~~ — CLOSED in Step 8B (see [full-inventory-discovery-and-freeze.md](./full-inventory-discovery-and-freeze.md))
 - persistent inventory / Page Snapshot / DB
 - institution work packets + Investigator Agent
 - Leadership / PRIMARY / Reviewer logic
