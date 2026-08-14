@@ -25,6 +25,7 @@ export * from "./evidence/evidence-provenance.js";
 export * from "./evidence/investigator-evidence-runner.js";
 export * from "./persistence/index.js";
 export * from "./reviewer/index.js";
+export * from "./recovery/index.js";
 export * from "./doctor/runtime-doctor.js";
 export * from "./smoke/deepseek-smoke.js";
 export * from "./smoke/search-smoke.js";

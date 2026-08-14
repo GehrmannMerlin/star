@@ -28,3 +28,5 @@ export * from "./tools/evidence/investigator-evidence-submission.js";
 export * from "./tools/evidence/submit-investigator-evidence.js";
 export * from "./tools/reviewer/review-decision-submission.js";
 export * from "./tools/reviewer/submit-review-decision.js";
+export * from "./tools/recovery/recovery-submission.js";
+export * from "./tools/recovery/submit-recovery-evidence.js";

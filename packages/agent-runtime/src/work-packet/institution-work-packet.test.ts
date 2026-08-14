@@ -103,4 +103,45 @@ describe("InMemoryInstitutionWorkPacketStore", () => {
     expect(failed.failureCode).toBe("INVESTIGATION_NOT_SUBMITTED");
     expect(store.get(packet.packetId)?.state).toBe("FAILED");
   });
+
+  it("transitions RECOVERY_REQUIRED -> RECOVERING -> READY_FOR_REVIEW (recovery returns to review)", () => {
+    const store = new InMemoryInstitutionWorkPacketStore();
+    const packets = store.createFromFrozenInventory(FROZEN_INVENTORY);
+    const packet = packets[0];
+    if (!packet) throw new Error("test setup: expected an INCLUDE packet");
+    store.updateState(packet.packetId, "INVESTIGATING");
+    store.updateState(packet.packetId, "EVIDENCE_PENDING");
+    store.updateState(packet.packetId, "EVIDENCE_GATHERING");
+    store.updateState(packet.packetId, "READY_FOR_REVIEW");
+    store.updateState(packet.packetId, "REVIEWING");
+    const recoveryRequired = store.updateState(packet.packetId, "RECOVERY_REQUIRED");
+    expect(recoveryRequired.state).toBe("RECOVERY_REQUIRED");
+    const recovering = store.updateState(packet.packetId, "RECOVERING", {
+      investigatorSessionId: "recovery-session-1",
+    });
+    expect(recovering.state).toBe("RECOVERING");
+    expect(recovering.investigatorSessionId).toBe("recovery-session-1");
+    const ready = store.updateState(packet.packetId, "READY_FOR_REVIEW");
+    expect(ready.state).toBe("READY_FOR_REVIEW");
+  });
+
+  it("allows RECOVERING -> FAILED and rejects RECOVERING -> POSITION_DECIDED", () => {
+    const store = new InMemoryInstitutionWorkPacketStore();
+    const packets = store.createFromFrozenInventory(FROZEN_INVENTORY);
+    const packet = packets[0];
+    if (!packet) throw new Error("test setup: expected an INCLUDE packet");
+    store.updateState(packet.packetId, "INVESTIGATING");
+    store.updateState(packet.packetId, "EVIDENCE_PENDING");
+    store.updateState(packet.packetId, "EVIDENCE_GATHERING");
+    store.updateState(packet.packetId, "READY_FOR_REVIEW");
+    store.updateState(packet.packetId, "REVIEWING");
+    store.updateState(packet.packetId, "RECOVERY_REQUIRED");
+    store.updateState(packet.packetId, "RECOVERING");
+    expect(() => store.updateState(packet.packetId, "POSITION_DECIDED")).toThrow(PacketStateError);
+    const failed = store.updateState(packet.packetId, "FAILED", {
+      failureCode: "RECOVERY_NOT_SUBMITTED",
+    });
+    expect(failed.state).toBe("FAILED");
+    expect(failed.failureCode).toBe("RECOVERY_NOT_SUBMITTED");
+  });
 });

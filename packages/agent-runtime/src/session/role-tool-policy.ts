@@ -43,12 +43,20 @@ export const REVIEWER_ROLE_TOOLS = [
   "submit_review_decision",
 ] as const;
 
+/** Tools the Recovery Agent may call (submit_recovery_evidence is the only
+ *  output boundary). No submit_inventory / submit_investigation /
+ *  submit_investigator_evidence / submit_review_decision; no coding tools. */
+export const RECOVERY_ROLE_TOOLS = [
+  ...BASE_AGENT_TOOLS,
+  "submit_recovery_evidence",
+] as const;
+
 export type RoleToolPolicy = Record<AgentRole, readonly string[]>;
 
 export const ROLE_TOOL_POLICY: RoleToolPolicy = {
   INVENTORY: INVENTORY_ROLE_TOOLS,
   INVESTIGATOR: INVESTIGATOR_ROLE_TOOLS,
-  RECOVERY: BASE_AGENT_TOOLS,
+  RECOVERY: RECOVERY_ROLE_TOOLS,
   REVIEWER: REVIEWER_ROLE_TOOLS,
 };
 

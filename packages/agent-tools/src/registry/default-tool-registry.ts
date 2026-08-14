@@ -23,6 +23,8 @@ export type CreateAgentToolRegistryOptions = {
   submitInvestigatorEvidenceTool?: AgentToolDefinition;
   /** Adds the submit_review_decision tool (Reviewer Agent only; wired by the runner). */
   submitReviewDecisionTool?: AgentToolDefinition;
+  /** Adds the submit_recovery_evidence tool (Recovery Agent only; wired by the runner). */
+  submitRecoveryEvidenceTool?: AgentToolDefinition;
 };
 
 export function createAgentToolRegistry(
@@ -50,6 +52,9 @@ export function createAgentToolRegistry(
   }
   if (options.submitReviewDecisionTool) {
     tools.push(options.submitReviewDecisionTool);
+  }
+  if (options.submitRecoveryEvidenceTool) {
+    tools.push(options.submitRecoveryEvidenceTool);
   }
   return new ToolRegistry(tools);
 }
