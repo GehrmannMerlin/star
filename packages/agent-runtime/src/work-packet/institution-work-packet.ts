@@ -270,6 +270,12 @@ export interface InstitutionWorkPacketRepositoryPort {
 export class InMemoryInstitutionWorkPacketStore {
   private packets = new Map<string, InstitutionWorkPacket>();
 
+  /** 用既有 packet 内容恢复/seed（Batch Workflow 从 Postgres 恢复 packet 后注入 Runner 链）。 */
+  seed(packet: InstitutionWorkPacket): InstitutionWorkPacket {
+    this.packets.set(packet.packetId, packet);
+    return packet;
+  }
+
   createFromFrozenInventory(
     frozen: InventorySubmissionPayload,
     opts?: { regionCode?: string },

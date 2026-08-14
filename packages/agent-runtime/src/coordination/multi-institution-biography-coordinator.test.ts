@@ -6,6 +6,8 @@ import {
   MultiInstitutionBiographyCoordinator,
   type PacketRunResult,
 } from "./multi-institution-biography-coordinator.js";
+import { createBiographyPacketWorkflowRunner, buildRegionBiographyBatchResult } from "../batch/biography-batch-wiring.js";
+import type { InstitutionBiographyWorkflowPort, InstitutionBiographyWorkflowResult } from "../batch/institution-biography-workflow-runner.js";
 
 function frozenWith(count: number): InventorySubmissionPayload {
   const inventory = Array.from({ length: count }, (_, index) => ({
@@ -83,5 +85,97 @@ describe("MultiInstitutionBiographyCoordinator", () => {
 
     expect(byName.get(a.packetId)).toMatchObject({ status: "FAILED", error: "boom" });
     expect(byName.get(b.packetId)).toMatchObject({ status: "SUCCESS" });
+  });
+});
+
+/** STEP 16: coordinator 通过薄 adapter 真实调用注入的 per-packet workflow port。 */
+describe("MultiInstitutionBiographyCoordinator real-workflow wiring", () => {
+  it("wires real workflow executor: coordinator calls the injected workflow port", async () => {
+    const store = new PostgresInstitutionWorkPacketStore(new FakePacketRepo());
+    const calls: string[] = [];
+    const fakeWorkflow: InstitutionBiographyWorkflowPort = {
+      run: async (packet) => {
+        calls.push(packet.packetId);
+        return {
+          packetId: packet.packetId,
+          institutionId: packet.institutionId,
+          institutionName: packet.institutionName,
+          status: "RESOLVED",
+          packetState: "POSITION_DECIDED",
+          stages: {
+            investigation: { status: "COMPLETED", toolCalls: {}, bochaCalled: false },
+            evidence: { status: "COMPLETED", toolCalls: {}, bochaCalled: false },
+            review: { status: "COMPLETED", reviewRound: 1, toolCalls: {}, bochaCalled: false },
+          },
+          biographyResult: null,
+          durationMs: 1,
+        };
+      },
+    };
+    const coordinator = new MultiInstitutionBiographyCoordinator({
+      packetStore: store,
+      concurrency: 1,
+      runPacket: createBiographyPacketWorkflowRunner(fakeWorkflow),
+    });
+
+    const { packets, results } = await coordinator.run(frozenWith(2));
+    expect(calls.sort()).toEqual(packets.map((p) => p.packetId).sort());
+    expect(results).toHaveLength(2);
+    expect(results.every((r) => r.status === "SUCCESS")).toBe(true);
+  });
+
+  it("adapter maps workflow throw to FAILED packet result without crashing the batch", async () => {
+    const store = new PostgresInstitutionWorkPacketStore(new FakePacketRepo());
+    const failingWorkflow: InstitutionBiographyWorkflowPort = {
+      run: async () => {
+        throw new Error("investigator unavailable");
+      },
+    };
+    const coordinator = new MultiInstitutionBiographyCoordinator({
+      packetStore: store,
+      concurrency: 1,
+      runPacket: createBiographyPacketWorkflowRunner(failingWorkflow),
+    });
+
+    const { results } = await coordinator.run(frozenWith(2));
+    expect(results).toHaveLength(2);
+    expect(results.every((r) => r.status === "FAILED")).toBe(true);
+  });
+
+  it("aggregates per-packet workflow results into RegionBiographyBatchResult", async () => {
+    const store = new PostgresInstitutionWorkPacketStore(new FakePacketRepo());
+    const collected: InstitutionBiographyWorkflowResult[] = [];
+    const fakeWorkflow: InstitutionBiographyWorkflowPort = {
+      run: async (packet) => {
+        const resolved = packet.institutionName === "机构1";
+        return {
+          packetId: packet.packetId,
+          institutionId: packet.institutionId,
+          institutionName: packet.institutionName,
+          status: resolved ? "RESOLVED" : "FAILED",
+          packetState: resolved ? "POSITION_DECIDED" : "FAILED",
+          stages: {
+            investigation: { status: "COMPLETED", toolCalls: {}, bochaCalled: false },
+            evidence: { status: "COMPLETED", toolCalls: {}, bochaCalled: false },
+            review: { status: "COMPLETED", reviewRound: 1, toolCalls: {}, bochaCalled: false },
+          },
+          biographyResult: null,
+          durationMs: 1,
+        };
+      },
+    };
+    const coordinator = new MultiInstitutionBiographyCoordinator({
+      packetStore: store,
+      concurrency: 1,
+      runPacket: createBiographyPacketWorkflowRunner(fakeWorkflow, (r) => collected.push(r)),
+    });
+
+    await coordinator.run(frozenWith(2));
+    const batch = buildRegionBiographyBatchResult(collected, "320106");
+    expect(batch.regionCode).toBe("320106");
+    expect(batch.totalPackets).toBe(2);
+    expect(batch.resolvedPackets).toBe(1);
+    expect(batch.failedPackets).toBe(1);
+    expect(batch.results.map((r) => r.status).sort()).toEqual(["FAILED", "RESOLVED"]);
   });
 });

@@ -1,0 +1,20 @@
+{
+  "region_code": "320106",
+  "region_name": "南京市鼓楼区",
+  "inventory": [
+    {
+      "institution_id": "glq-people-gov",
+      "standard_name": "鼓楼区人民政府",
+      "administrative_level": "COUNTY",
+      "core_institution_type": "GOVERNMENT",
+      "decision": "INCLUDE"
+    },
+    {
+      "institution_id": "glq-education-bureau",
+      "standard_name": "鼓楼区教育局",
+      "administrative_level": "COUNTY",
+      "core_institution_type": "GOVERNMENT",
+      "decision": "INCLUDE"
+    }
+  ]
+}

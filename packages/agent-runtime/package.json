@@ -20,7 +20,8 @@
     "smoke:evidence": "tsx src/smoke/evidence-smoke.ts",
     "smoke:reviewer": "tsx src/smoke/reviewer-smoke.ts",
     "smoke:recovery": "tsx src/smoke/recovery-smoke.ts",
-    "smoke:rereview": "tsx src/smoke/recovery-rereview-smoke.ts"
+    "smoke:rereview": "tsx src/smoke/recovery-rereview-smoke.ts",
+    "smoke:batch-biography": "tsx src/smoke/batch-biography-smoke.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.1",

@@ -26,6 +26,8 @@ export * from "./evidence/investigator-evidence-runner.js";
 export * from "./persistence/index.js";
 export * from "./results/biography-url-result.js";
 export * from "./coordination/multi-institution-biography-coordinator.js";
+export * from "./batch/institution-biography-workflow-runner.js";
+export * from "./batch/biography-batch-wiring.js";
 export * from "./reviewer/index.js";
 export * from "./recovery/index.js";
 export * from "./doctor/runtime-doctor.js";
