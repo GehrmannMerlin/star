@@ -4,7 +4,6 @@ node_modules
 .tmp-*
 *.tsbuildinfo
 docs
-third-party
 .E:\StellarisData
 apps/*/dist
 packages/*/dist
