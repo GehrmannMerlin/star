@@ -8,6 +8,7 @@ import type { BrowserPool } from "@stellaris/crawler/browser/render.js";
 import type { RunTaskPipeline } from "./replay-driver.js";
 import type { RunMultiInstitutionPipeline } from "./multi-institution-driver.js";
 import type { RunMultiRegionPipeline } from "./multi-region-driver.js";
+import type { BiographyTaskExecutor } from "./biography-task-service.js";
 import { newTraceId, type SseEvent } from "@stellaris/contracts";
 import { emitWithMetrics } from "../contracts/task-routes.js";
 
@@ -32,6 +33,13 @@ export interface WorkerDeps {
   browserPool?: BrowserPool;
   /** SSE 推送（进程内缓冲，task-routes pushSseEvent）。 */
   emit: (taskId: string, e: SseEvent) => void;
+  /**
+   * STEP 17：Biography Agent Task Runtime 执行器（服务器配置 STELLARIS_TASK_RUNTIME=biography 时注入）。
+   * 存在时，TARGETED 与单行政区 FULL_INSTITUTION 任务改由 Biography 运行时执行（Legacy Executor → Agent
+   * Task Runner 的最小替换，复用同一 stellaris_task job boundary）；多行政区 FULL_INSTITUTION 仍走
+   * runMultiRegionPipeline。缺省为 legacy 驱动（既有测试/离线行为不变）。
+   */
+  biographyExecutor?: BiographyTaskExecutor;
   runTaskPipeline: RunTaskPipeline;
   runMultiInstitutionPipeline?: RunMultiInstitutionPipeline;
   runMultiRegionPipeline?: RunMultiRegionPipeline;
@@ -105,15 +113,29 @@ export async function runTaskJob(deps: WorkerDeps, taskRunId: string): Promise<v
   };
 
   switch (task.mode) {
-    case "TARGETED":
+    case "TARGETED": {
+      if (deps.biographyExecutor) {
+        log("pipeline", "TARGETED Biography Agent");
+        await deps.biographyExecutor.run(taskRunId);
+        log("pipeline", "TARGETED Biography Agent 完成");
+        break;
+      }
       log("pipeline", "TARGETED 回放");
       await deps.runTaskPipeline(base);
       log("pipeline", "TARGETED 完成");
       break;
+    }
     case "FULL_INSTITUTION": {
-      log("pipeline", "FULL_INSTITUTION 多机构");
       const scopes = await deps.repos.targetScope.listByTask(taskRunId);
       const hasRegionCodes = scopes.length > 1;
+      // STEP 17：Biography 运行时接管单行政区 FULL_INSTITUTION；多行政区（regionCodes）仍走 legacy。
+      if (deps.biographyExecutor && !hasRegionCodes) {
+        log("pipeline", "FULL_INSTITUTION Biography Agent");
+        await deps.biographyExecutor.run(taskRunId);
+        log("pipeline", "FULL_INSTITUTION Biography Agent 完成");
+        break;
+      }
+      log("pipeline", "FULL_INSTITUTION 多机构");
       if (hasRegionCodes && deps.runMultiRegionPipeline) {
         await deps.runMultiRegionPipeline({
           ...base,

@@ -23,6 +23,7 @@ function makeTask(overrides: Partial<TaskRunRow> = {}): TaskRunRow {
     reviewed_slots: 0,
     recovery_count: 0,
     blocked_count: 0,
+    result_summary: null,
     ...overrides,
   };
 }
@@ -108,5 +109,53 @@ describe("P5-T1 Worker 任务路由", () => {
   it("taskJobKey 含任务ID+模式+规则版本", () => {
     const key = taskJobKey(makeTask({ id: "t", mode: "FULL_INSTITUTION", rule_version: "v2" }));
     expect(key).toBe("task:t:FULL_INSTITUTION:v2");
+  });
+});
+
+describe("P5-T2 STEP 17 — Biography Task Runtime 路由（biographyExecutor 注入时）", () => {
+  it("TARGETED 路由到 biographyExecutor（不跑 legacy 回放）", async () => {
+    const biographyExecutor = { run: vi.fn(async () => {}) };
+    const deps = makeDeps({ biographyExecutor });
+    const findById = deps.repos.taskRun.findById as ReturnType<typeof vi.fn>;
+    findById.mockResolvedValue(makeTask({ mode: "TARGETED" }));
+    await runTaskJob(deps, "task-1");
+    expect(biographyExecutor.run).toHaveBeenCalledOnce();
+    expect(biographyExecutor.run).toHaveBeenCalledWith("task-1");
+    expect(deps.runTaskPipeline).not.toHaveBeenCalled();
+  });
+
+  it("FULL_INSTITUTION 单行政区路由到 biographyExecutor（不跑 legacy 多机构）", async () => {
+    const biographyExecutor = { run: vi.fn(async () => {}) };
+    const deps = makeDeps({ biographyExecutor });
+    const findById = deps.repos.taskRun.findById as ReturnType<typeof vi.fn>;
+    findById.mockResolvedValue(makeTask({ mode: "FULL_INSTITUTION" }));
+    (deps.repos.targetScope.listByTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { region_code: "320106" },
+    ]);
+    await runTaskJob(deps, "task-1");
+    expect(biographyExecutor.run).toHaveBeenCalledOnce();
+    expect(deps.runMultiInstitutionPipeline).not.toHaveBeenCalled();
+  });
+
+  it("FULL_INSTITUTION 多行政区（regionCodes）仍路由到 runMultiRegionPipeline", async () => {
+    const biographyExecutor = { run: vi.fn(async () => {}) };
+    const deps = makeDeps({ biographyExecutor });
+    const findById = deps.repos.taskRun.findById as ReturnType<typeof vi.fn>;
+    findById.mockResolvedValue(makeTask({ mode: "FULL_INSTITUTION" }));
+    (deps.repos.targetScope.listByTask as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { region_code: "340000" },
+      { region_code: "340100" },
+    ]);
+    await runTaskJob(deps, "task-1");
+    expect(deps.runMultiRegionPipeline).toHaveBeenCalledOnce();
+    expect(biographyExecutor.run).not.toHaveBeenCalled();
+  });
+
+  it("无 biographyExecutor（legacy 配置）保持既有路由", async () => {
+    const deps = makeDeps();
+    const findById = deps.repos.taskRun.findById as ReturnType<typeof vi.fn>;
+    findById.mockResolvedValue(makeTask({ mode: "TARGETED" }));
+    await runTaskJob(deps, "task-1");
+    expect(deps.runTaskPipeline).toHaveBeenCalledOnce();
   });
 });

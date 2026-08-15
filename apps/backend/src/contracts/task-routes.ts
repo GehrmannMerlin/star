@@ -295,6 +295,24 @@ export async function registerTaskRoutes(
     return rows.map(mapResultRowToView);
   });
 
+  // Biography Task Result（STEP 17）：只读 task_run.result_summary 投影，无需 Agent / LLM。
+  app.get<{ Params: { id: string } }>(
+    "/api/tasks/:id/biography-result",
+    async (req, reply) => {
+      const owned = await requireOwnedTask(req, reply, repos, req.params.id);
+      if (!owned) return reply;
+      const task = owned.task;
+      const raw = task.result_summary;
+      // pg 解析 jsonb 列为 JS 对象（null = 尚未写入结果投影）。
+      const biographyResult = raw !== null && typeof raw === "object" ? raw : null;
+      return {
+        taskId: task.id,
+        taskStatus: task.status,
+        biographyResult,
+      };
+    },
+  );
+
   // 证据详情（简化：汇总支持片段与来源链接）。
   app.get<{ Params: { id: string; resultRowId: string } }>(
     "/api/tasks/:id/evidence/:resultRowId",

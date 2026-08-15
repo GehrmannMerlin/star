@@ -126,3 +126,51 @@ export const TaskDetail = Type.Object({
   institution: InstitutionSnapshotView,
 });
 export type TaskDetail = Static<typeof TaskDetail>;
+
+// ─────────────────────────── Biography Task Result（STEP 17） ───────────────────────────
+
+/** 单个 PRIMARY 人员的 Biography URL 结果（decisionStatus：RESOLVED | UNRESOLVED）。 */
+export const BiographyTaskPrimaryResult = Type.Object({
+  decisionStatus: Type.Union([Type.Literal("RESOLVED"), Type.Literal("UNRESOLVED")]),
+  biographyUrl: Type.Union([Type.String(), Type.Null()]),
+});
+
+/** 单个机构（Packet）的 Biography 采集结果摘要。 */
+export const BiographyTaskInstitutionResult = Type.Object({
+  packetId: Type.String(),
+  institutionId: Type.String(),
+  institutionName: Type.String(),
+  /** RESOLVED | PARTIAL | UNRESOLVED | FAILED（Packet 级投影状态）。 */
+  status: Type.String(),
+  packetState: Type.String(),
+  primary1: Type.Union([BiographyTaskPrimaryResult, Type.Null()]),
+  primary2: Type.Union([BiographyTaskPrimaryResult, Type.Null()]),
+});
+
+/**
+ * Biography Task Result 投影（STEP 17）。
+ * 只存 RegionBiographyBatchResult 的 aggregation/projection 摘要；PRIMARY Biography URL
+ * 最终事实仍是 latest frozen APPROVED review。读取无需 Agent / LLM。
+ */
+export const BiographyTaskResultView = Type.Object({
+  taskId: Type.String(),
+  regionCode: Type.String(),
+  regionName: Type.Optional(Type.String()),
+  /** COMPLETED | PARTIAL_COMPLETED | FAILED（确定性终态投影）。 */
+  status: Type.String(),
+  totalPackets: Type.Number(),
+  resolvedPackets: Type.Number(),
+  partialPackets: Type.Number(),
+  unresolvedPackets: Type.Number(),
+  failedPackets: Type.Number(),
+  results: Type.Array(BiographyTaskInstitutionResult),
+});
+export type BiographyTaskResultView = Static<typeof BiographyTaskResultView>;
+
+/** Biography Task Result 查询响应（无结果时 biographyResult 为 null）。 */
+export const BiographyTaskResultResponse = Type.Object({
+  taskId: Type.String(),
+  taskStatus: Type.Enum(TaskRunStatus),
+  biographyResult: Type.Union([BiographyTaskResultView, Type.Null()]),
+});
+export type BiographyTaskResultResponse = Static<typeof BiographyTaskResultResponse>;

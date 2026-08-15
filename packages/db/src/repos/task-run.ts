@@ -72,6 +72,22 @@ export class TaskRunRepository {
   }
 
   /**
+   * 原子领取任务（STEP 17：Graphile 重复投递/多 Worker 竞态的最小 Claim Gate）。
+   * 只允许 PENDING → PREPARING：一旦领取即进入运行态（PREPARING→CRAWLING 由执行器推进），
+   * 后续重复投递（任务已在 PREPARING/CRAWLING）返回 undefined → 调用方不启动第二套 Agent。
+   * 崩溃后重新领取（Resume）本轮 Deferred。不做分布式锁框架（规格 §53）。
+   */
+  async claimTask(taskRunId: string): Promise<TaskRunRow | undefined> {
+    return this.db
+      .updateTable("task_run")
+      .set({ status: "PREPARING", started_at: new Date().toISOString() })
+      .where("id", "=", taskRunId)
+      .where("status", "=", "PENDING")
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
    * 推进机构处理计数（原子自增，规格 §20.2 真实计数）。
    * 返回更新后的任务行。
    */
@@ -101,6 +117,53 @@ export class TaskRunRepository {
       })
       .where("id", "=", taskRunId)
       .execute();
+  }
+
+  /**
+   * 更新进度计数（STEP 17：Biography Task 进度投影到既有 task_run 进度列）。
+   * 只更新显式传入的字段；total_institutions 在 inventory 冻结后设置一次，
+   * processed_institutions 逐 Packet 完成时自增（既有 incrementProcessed）。
+   */
+  async setProgress(
+    taskRunId: string,
+    patch: {
+      totalInstitutions?: number;
+      processedInstitutions?: number;
+      reviewedSlots?: number;
+      recoveryCount?: number;
+      blockedCount?: number;
+    },
+  ): Promise<TaskRunRow> {
+    const set: Record<string, number> = {};
+    if (patch.totalInstitutions !== undefined) set.total_institutions = patch.totalInstitutions;
+    if (patch.processedInstitutions !== undefined) set.processed_institutions = patch.processedInstitutions;
+    if (patch.reviewedSlots !== undefined) set.reviewed_slots = patch.reviewedSlots;
+    if (patch.recoveryCount !== undefined) set.recovery_count = patch.recoveryCount;
+    if (patch.blockedCount !== undefined) set.blocked_count = patch.blockedCount;
+    return this.db
+      .updateTable("task_run")
+      .set(set)
+      .where("id", "=", taskRunId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  /**
+   * 保存 Task Result 投影（STEP 17：Biography Task 的批量结果摘要）。
+   * result_summary 只是 aggregation/projection（RegionBiographyBatchResult + taskId/regionName）；
+   * PRIMARY Biography URL 最终事实仍是 latest frozen APPROVED review，不在此重复 Artifact。
+   * jsonb 列：pg 绑定对象参数即 JSON.stringify，读取时 pg 解析为 JS 对象。
+   */
+  async setResultSummary(
+    taskRunId: string,
+    summary: unknown,
+  ): Promise<TaskRunRow> {
+    return this.db
+      .updateTable("task_run")
+      .set({ result_summary: summary })
+      .where("id", "=", taskRunId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
   }
 
   /** 查询任务。 */

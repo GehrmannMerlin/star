@@ -12,6 +12,8 @@ export * from "./session/tool-policy.js";
 export * from "./session/pi-tool-adapter.js";
 export * from "./session/session-factory.js";
 export * from "./work-packet/institution-work-packet.js";
+export * from "./inventory/inventory-types.js";
+export * from "./inventory/inventory-agent-runner.js";
 export * from "./investigation/investigation-types.js";
 export * from "./investigation/investigation-submission-sink.js";
 export * from "./investigation/skill-investigation-validator.js";

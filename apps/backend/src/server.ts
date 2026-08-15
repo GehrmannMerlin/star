@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { HEALTH_SERVICE_NAME, HEALTH_VERSION, type Health } from "@stellaris/contracts";
-import { createDb, dbConfigFromEnv, createRepositories, migrateToLatest } from "@stellaris/db";
+import { createDb, dbConfigFromEnv, createRepositories, migrateToLatest, type Repositories } from "@stellaris/db";
 import { createEvidenceStore } from "@stellaris/evidence";
 import { createSafeEgressPolicy, type SafeEgressPolicy } from "@stellaris/crawler/safe-egress.js";
 import type { SiteAdapter } from "@stellaris/crawler/adapter/loader.js";
@@ -8,6 +8,7 @@ import { loadAdapter } from "@stellaris/crawler/adapter/loader.js";
 import { createReplayDriver } from "./workers/replay-driver.js";
 import { runMultiInstitutionPipeline } from "./workers/multi-institution-driver.js";
 import { runMultiRegionPipeline } from "./workers/multi-region-driver.js";
+import type { BiographyTaskExecutionService } from "./workers/biography-task-service.js";
 import { registerTaskRoutes, toControlDeps, pushSseEvent } from "./contracts/task-routes.js";
 import { registerRegionRoutes } from "./contracts/region-routes.js";
 import { registerMetricsRoutes } from "./contracts/metrics-routes.js";
@@ -24,6 +25,11 @@ export interface ServerDeps {
   db?: Awaited<ReturnType<typeof createDb>>;
   /** P5：PostgreSQL 连接池（供 Graphile Worker 队列投递/worker；缺省无队列，直接调驱动）。 */
   pgPool?: import("pg").Pool;
+  /**
+   * STEP 17：Biography Agent Task Runtime 执行器（测试注入 seam）。
+   * 缺省时，仅在 STELLARIS_TASK_RUNTIME=biography 且提供 pgPool 时构建真实执行器。
+   */
+  biographyExecutor?: Pick<BiographyTaskExecutionService, "run">;
   /** 离线金标 fixture 基础 URL（缺省关闭）。 */
   fixtureUrl?: string;
   /** 出口模式（缺省 production；离线测试传 offline-fixture）。 */
@@ -101,6 +107,12 @@ export async function buildApp(deps: ServerDeps = {}): Promise<FastifyInstance> 
   // P5：启动 Graphile Worker 持久队列（STELLARIS_WORKER=1 或提供 pgPool 时）。
   if (deps.pgPool && process.env.STELLARIS_WORKER === "1") {
     const { runWorker } = await import("./workers/queue.js");
+    // STEP 17：服务器后台配置选择 Biography Agent Task Runtime（缺省 legacy）。
+    const biographyExecutor =
+      deps.biographyExecutor ??
+      (process.env.STELLARIS_TASK_RUNTIME === "biography"
+        ? await createBiographyTaskExecutor(db, repos)
+        : undefined);
     const stopWorker = await runWorker({
       pgPool: deps.pgPool,
       repos,
@@ -114,11 +126,39 @@ export async function buildApp(deps: ServerDeps = {}): Promise<FastifyInstance> 
       runTaskPipeline: createReplayDriver(),
       runMultiInstitutionPipeline,
       runMultiRegionPipeline,
+      ...(biographyExecutor ? { biographyExecutor } : {}),
     });
     app.addHook("onClose", () => void stopWorker());
   }
 
   return app;
+}
+
+/**
+ * STEP 17：构建真实 Biography Agent Task Runtime 执行器（服务器后台配置，非用户请求字段）。
+ * Provider-neutral：模型/搜索由 ModelPolicy + 服务器环境配置决定，任务请求永不携带。
+ */
+async function createBiographyTaskExecutor(
+  db: Awaited<ReturnType<typeof createDb>>,
+  repos: Repositories,
+): Promise<Pick<BiographyTaskExecutionService, "run">> {
+  const {
+    createRuntimeConfig,
+    ModelPolicy,
+    PiModelResolver,
+    SkillRuntime,
+  } = await import("@stellaris/agent-runtime");
+  const { BiographyTaskExecutionService } = await import("./workers/biography-task-service.js");
+  const skillRuntime = new SkillRuntime(createRuntimeConfig());
+  const modelResolver = await PiModelResolver.create();
+  return new BiographyTaskExecutionService({
+    db,
+    repos,
+    emit: (taskId, e) => pushSseEvent(taskId, e),
+    skillRuntime,
+    modelPolicy: new ModelPolicy(),
+    modelResolver,
+  });
 }
 
 /** 构造 enqueueTask（Graphile Worker 投递，幂等 jobKey）。 */

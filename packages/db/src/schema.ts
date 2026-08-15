@@ -51,6 +51,12 @@ export interface TaskRunTable extends BaseTable {
   started_at: string | null;
   finished_at: string | null;
   error_message: string | null;
+  /**
+   * Task Result 投影（STEP 17：Biography Task 批量结果摘要，jsonb）。
+   * 只存 aggregation/projection（RegionBiographyBatchResult + taskId/regionName）；
+   * PRIMARY Biography URL 最终事实仍是 latest frozen APPROVED review，不复制 Artifact。
+   */
+  result_summary: unknown | null;
 }
 
 export interface TargetScopeTable extends BaseTable {

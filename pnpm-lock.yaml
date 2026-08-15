@@ -22,6 +22,12 @@ importers:
       '@sinclair/typebox':
         specifier: 0.34.52
         version: 0.34.52
+      '@stellaris/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
+      '@stellaris/agent-tools':
+        specifier: workspace:*
+        version: link:../../packages/agent-tools
       '@stellaris/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
