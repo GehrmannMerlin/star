@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import type { TaskRunSummary } from "@stellaris/contracts";
+import { isExportableStatus } from "../task-status.js";
 
 export interface TaskDetailView {
   task: TaskRunSummary;
@@ -22,6 +23,7 @@ export function TaskDetail({
   controlButtons?: ReactElement;
 }): React.ReactElement {
   const active = ACTIVE_STATUSES.has(task.status);
+  const exportable = isExportableStatus(task.status);
   return (
     <section className="task-detail" aria-label="任务状态">
       <div className="stat-row">
@@ -34,7 +36,7 @@ export function TaskDetail({
       {/* 细进度线：只表达活动状态，不暗示完成比例（§20.2 禁止虚假百分比）。 */}
       {active && <div className="activity-line" aria-hidden="true" />}
       {controlButtons}
-      <button type="button" onClick={() => void onExport()}>
+      <button type="button" disabled={!exportable} onClick={() => void onExport()}>
         导出 Excel
       </button>
     </section>

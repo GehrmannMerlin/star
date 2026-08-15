@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TaskForm, type TaskFormValues } from "./components/TaskForm.js";
 import { TaskDetail as TaskDetailView } from "./components/TaskDetail.js";
 import { TaskControlButtons } from "./components/TaskControlButtons.js";
 import { TaskHistory } from "./components/TaskHistory.js";
 import { ResultsTable } from "./components/ResultsTable.js";
 import type { CreateTaskRequest, TaskRunSummary, ResultRowView, EvidenceDetail, TaskDetail, RegionNode } from "@stellaris/contracts";
+import { isTerminalStatus } from "./task-status.js";
 import "./app.css";
 
 /** API 客户端接口（生产用 fetch/EventSource 实现，测试注入 mock）。 */
@@ -79,6 +80,33 @@ export function App({ deps }: { deps: AppDeps }): React.ReactElement {
   );
 }
 
+/** 活跃任务 ID 持久化 key（只存 ID；后端 DB 是任务状态 SSoT）。 */
+const ACTIVE_TASK_KEY = "stellaris.activeTaskId";
+
+function readActiveTaskId(): string | null {
+  try {
+    return typeof window !== "undefined" ? window.localStorage.getItem(ACTIVE_TASK_KEY) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeActiveTaskId(id: string): void {
+  try {
+    if (typeof window !== "undefined") window.localStorage.setItem(ACTIVE_TASK_KEY, id);
+  } catch {
+    // 本地存储不可用时静默跳过（不影响任务本身）。
+  }
+}
+
+function clearActiveTaskId(): void {
+  try {
+    if (typeof window !== "undefined") window.localStorage.removeItem(ACTIVE_TASK_KEY);
+  } catch {
+    // 本地存储不可用时静默跳过。
+  }
+}
+
 /** 任务台视图：创建任务 → 运行区 → 结果表。 */
 function WorkspaceView({ api }: { api: ApiClient }): React.ReactElement {
   const [task, setTask] = useState<TaskRunSummary | null>(null);
@@ -86,6 +114,84 @@ function WorkspaceView({ api }: { api: ApiClient }): React.ReactElement {
   const [loading, setLoading] = useState(false);
   const [evidence, setEvidence] = useState<EvidenceDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const subscribedTaskRef = useRef<string | null>(null);
+
+  /** 终态对齐：拉最终快照 + 结果（SSE 终态事件共用；§39 snapshot 最终对齐）。 */
+  const reconcile = async (taskId: string): Promise<void> => {
+    try {
+      const detail = await api.getTask(taskId);
+      setTask(detail.task);
+      const rows = await api.getResults(taskId);
+      setResults(rows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "任务状态刷新失败");
+    }
+  };
+
+  // 刷新 / 返回重灌：存在 activeTaskId 则读后端快照（不存在则清本地 ID）。
+  useEffect(() => {
+    const activeTaskId = readActiveTaskId();
+    if (!activeTaskId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const detail = await api.getTask(activeTaskId);
+        if (cancelled) return;
+        setTask(detail.task);
+        const rows = await api.getResults(activeTaskId);
+        if (cancelled) return;
+        setResults(rows);
+      } catch (e) {
+        if (!cancelled) clearActiveTaskId();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
+
+  // SSE 订阅：活动任务实时进度；终态任务不订阅（§93）。
+  useEffect(() => {
+    if (!task || isTerminalStatus(task.status)) return;
+    if (subscribedTaskRef.current === task.id) return;
+    subscribedTaskRef.current = task.id;
+    const es = api.openEvents(task.id);
+
+    const onState = (event: Event): void => {
+      const e = JSON.parse((event as MessageEvent).data) as { status: string; statusZh: string };
+      setTask((prev) => (prev ? { ...prev, status: e.status as TaskRunSummary["status"], statusZh: e.statusZh } : prev));
+    };
+    const onProgress = (event: Event): void => {
+      const e = JSON.parse((event as MessageEvent).data) as { processedInstitutions: number; totalInstitutions: number };
+      setTask((prev) => (prev ? { ...prev, processedInstitutions: e.processedInstitutions, totalInstitutions: e.totalInstitutions } : prev));
+    };
+    const onTerminal = (): void => {
+      es.close();
+      subscribedTaskRef.current = null;
+      void reconcile(task.id);
+    };
+    const onPaused = (event: Event): void => {
+      const e = JSON.parse((event as MessageEvent).data) as { statusZh: string };
+      setTask((prev) => (prev ? { ...prev, status: "PAUSED" as TaskRunSummary["status"], statusZh: e.statusZh } : prev));
+    };
+    const onResumed = (event: Event): void => {
+      const e = JSON.parse((event as MessageEvent).data) as { statusZh: string };
+      setTask((prev) => (prev ? { ...prev, status: "CRAWLING" as TaskRunSummary["status"], statusZh: e.statusZh } : prev));
+    };
+
+    es.addEventListener("task.state_changed", onState);
+    es.addEventListener("task.progress_changed", onProgress);
+    es.addEventListener("task.completed", onTerminal);
+    es.addEventListener("task.failed", onTerminal);
+    es.addEventListener("task.cancelled", onTerminal);
+    es.addEventListener("task.paused", onPaused);
+    es.addEventListener("task.resumed", onResumed);
+
+    return () => {
+      es.close();
+      subscribedTaskRef.current = null;
+    };
+  }, [task?.id, api]);
 
   const handleSubmit = async (values: TaskFormValues): Promise<void> => {
     setLoading(true);
@@ -94,6 +200,7 @@ function WorkspaceView({ api }: { api: ApiClient }): React.ReactElement {
       const req = buildCreateRequest(values);
       const resp = await api.createTask(req);
       setTask(resp.task);
+      writeActiveTaskId(resp.task.id);
       const rows = await api.getResults(resp.task.id);
       setResults(rows);
     } catch (e) {
@@ -115,7 +222,12 @@ function WorkspaceView({ api }: { api: ApiClient }): React.ReactElement {
 
   const handleExport = async (): Promise<void> => {
     if (!task) return;
-    await api.downloadExport(task.id);
+    setError(null);
+    try {
+      await api.downloadExport(task.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "导出失败");
+    }
   };
 
   return (
@@ -172,7 +284,12 @@ function DetailView({
   };
 
   const handleExport = async (): Promise<void> => {
-    await api.downloadExport(taskId);
+    setError(null);
+    try {
+      await api.downloadExport(taskId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "导出失败");
+    }
   };
 
   return (

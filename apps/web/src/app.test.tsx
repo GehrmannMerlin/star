@@ -7,9 +7,30 @@ import type {
   TaskDetail,
   ResultRowView,
   EvidenceDetail,
+  TaskRunSummary,
 } from "@stellaris/contracts";
 
 const user = userEvent.setup();
+
+class FakeEventSource extends EventTarget {
+  closed = false;
+
+  constructor(readonly url: string) {
+    super();
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+
+  emit(type: string, data: unknown): void {
+    const event = new Event(type);
+    Object.assign(event, { data: JSON.stringify(data) });
+    this.dispatchEvent(event);
+  }
+}
+
+let lastEvents: FakeEventSource | null = null;
 
 const taskSummary = {
   id: "t1",
@@ -61,7 +82,7 @@ const resultRows: ResultRowView[] = [
 ];
 
 const mockApi: ApiClient = {
-  createTask: vi.fn(async () => ({ task: taskSummary, idempotencyResult: "created" }) satisfies CreateTaskResponse),
+  createTask: vi.fn(async () => ({ task: taskSummary, idempotencyResult: "created" as const }) satisfies CreateTaskResponse),
   getTask: vi.fn(async () => ({
     task: taskSummary,
     scopes: [],
@@ -70,7 +91,7 @@ const mockApi: ApiClient = {
       taskRunId: "t1",
       regionCode: "110000",
       officialName: "某某区人民政府",
-      institutionType: "government",
+      institutionType: "government" as const,
       discoverySource: "user_specified",
       selectTwoPrimary: true,
       frozenAt: new Date().toISOString(),
@@ -85,7 +106,7 @@ const mockApi: ApiClient = {
     },
   }) satisfies EvidenceDetail),
   downloadExport: vi.fn(async () => {}),
-  openEvents: vi.fn(),
+  openEvents: vi.fn(() => new FakeEventSource("events") as unknown as EventSource),
   listTasks: vi.fn(async () => ({ tasks: [], total: 0 })),
   controlTask: vi.fn(async () => taskSummary),
   listProvinces: vi.fn(async () => [{ code: "340000", name: "安徽省", level: "province" as const, parentCode: null }]),
@@ -95,9 +116,55 @@ const mockApi: ApiClient = {
 };
 const deps: AppDeps = { api: mockApi };
 
+// 运行中任务 fixture（SSE 进度 / 重灌测试用）。
+const runningTask: TaskRunSummary = {
+  ...taskSummary,
+  id: "t2",
+  status: "CRAWLING",
+  statusZh: "正在抓取",
+  processedInstitutions: 0,
+  totalInstitutions: 3,
+  controlable: true,
+};
+
+/** 构造可覆盖的 ApiClient（默认返回运行中任务）。 */
+function makeApi(overrides: Partial<ApiClient> = {}): ApiClient {
+  const institution = {
+    id: "i1",
+    taskRunId: "t2",
+    regionCode: "340000",
+    officialName: "某某区人民政府",
+    institutionType: "government" as const,
+    discoverySource: "user_specified",
+    selectTwoPrimary: true,
+    frozenAt: new Date().toISOString(),
+    status: "ACTIVE",
+  };
+  return {
+    createTask: vi.fn(async () => ({ task: runningTask, idempotencyResult: "created" as const })),
+    getTask: vi.fn(async () => ({ task: runningTask, scopes: [], institution })),
+    getResults: vi.fn(async () => []),
+    getEvidence: vi.fn(async () => ({ summary: { supportingSnippets: [], officialSourceUrls: [] } })),
+    downloadExport: vi.fn(async () => {}),
+    openEvents: vi.fn(() => {
+      lastEvents = new FakeEventSource("events");
+      return lastEvents as unknown as EventSource;
+    }),
+    listTasks: vi.fn(async () => ({ tasks: [], total: 0 })),
+    controlTask: vi.fn(async () => runningTask),
+    listProvinces: vi.fn(async () => [{ code: "340000", name: "安徽省", level: "province" as const, parentCode: null }]),
+    listChildren: vi.fn(async () => [{ code: "340100", name: "合肥市", level: "city" as const, parentCode: "340000" }]),
+    validateRegions: vi.fn(async () => ({ valid: true, invalid: [] })),
+    expandRegions: vi.fn(async (codes: string[]) => codes.map((c) => ({ code: c, name: c, level: "county" as const, parentCode: null }))),
+    ...overrides,
+  };
+}
+
 // 每个测试独立 mock 状态，避免跨测试调用记录污染（FULL_INSTITUTION/TARGETED 断言）。
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
+  lastEvents = null;
 });
 
 /** 切换到「指定机构」模式并填写 TARGETED 表单。 */
@@ -205,5 +272,102 @@ describe("网页工作台", () => {
     expect(submit).toHaveAttribute("type", "submit");
     expect(submit).toBeDisabled();
     expect(submit.querySelector(".icon-play")).toHaveAttribute("aria-hidden", "true");
+  });
+});
+
+describe("任务进度 SSE 绑定", () => {
+  it("创建运行中任务后订阅 SSE 并更新进度", async () => {
+    const api = makeApi();
+    render(<App deps={{ api }} />);
+    await switchToTargeted();
+    await user.click(screen.getByRole("button", { name: "开始采集" }));
+
+    await waitFor(() => expect(api.openEvents).toHaveBeenCalledTimes(1));
+    expect(lastEvents).not.toBeNull();
+    lastEvents!.emit("task.progress_changed", { processedInstitutions: 2, totalInstitutions: 3 });
+    await waitFor(() => expect(screen.getByText("已处理机构：2/3")).toBeInTheDocument());
+  });
+
+  it("终态 SSE 事件后对齐快照并关闭 SSE", async () => {
+    const completed: TaskRunSummary = { ...runningTask, status: "COMPLETED", statusZh: "已完成", controlable: false };
+    const api = makeApi({
+      getTask: vi.fn(async () => ({
+        task: completed,
+        scopes: [],
+        institution: { id: "i1", taskRunId: "t2", regionCode: "340000", officialName: "某某区人民政府", institutionType: "government" as const, discoverySource: "user_specified", selectTwoPrimary: true, frozenAt: new Date().toISOString(), status: "ACTIVE" },
+      })),
+    });
+    render(<App deps={{ api }} />);
+    await switchToTargeted();
+    await user.click(screen.getByRole("button", { name: "开始采集" }));
+
+    await waitFor(() => expect(api.openEvents).toHaveBeenCalledTimes(1));
+    const es = lastEvents!;
+    es.emit("task.completed", { statusZh: "已完成" });
+
+    await waitFor(() => expect(screen.getByText(/已完成/)).toBeInTheDocument());
+    expect(es.closed).toBe(true);
+    expect(api.getResults).toHaveBeenCalled();
+  });
+
+  it("终态任务不订阅 SSE", async () => {
+    render(<App deps={deps} />);
+    await switchToTargeted();
+    await user.click(screen.getByRole("button", { name: "开始采集" }));
+    await waitFor(() => expect(screen.getByText(/已完成/)).toBeInTheDocument());
+    expect(mockApi.openEvents).not.toHaveBeenCalled();
+  });
+});
+
+describe("刷新重灌", () => {
+  it("localStorage 存在 activeTaskId 时挂载即恢复任务", async () => {
+    window.localStorage.setItem("stellaris.activeTaskId", "t2");
+    const api = makeApi();
+    render(<App deps={{ api }} />);
+
+    await waitFor(() => expect(api.getTask).toHaveBeenCalledWith("t2"));
+    expect(await screen.findByText(/正在抓取/)).toBeInTheDocument();
+  });
+
+  it("重灌时后端报错则清除 activeTaskId", async () => {
+    window.localStorage.setItem("stellaris.activeTaskId", "ghost");
+    const api = makeApi({
+      getTask: vi.fn(async () => {
+        throw new Error("404");
+      }),
+    });
+    render(<App deps={{ api }} />);
+
+    await waitFor(() => expect(window.localStorage.getItem("stellaris.activeTaskId")).toBeNull());
+  });
+});
+
+describe("导出按钮 gating", () => {
+  it("非终态任务导出按钮禁用", async () => {
+    const api = makeApi();
+    render(<App deps={{ api }} />);
+    await switchToTargeted();
+    await user.click(screen.getByRole("button", { name: "开始采集" }));
+    await waitFor(() => expect(screen.getByText(/正在抓取/)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "导出 Excel" })).toBeDisabled();
+  });
+
+  it("COMPLETED 任务导出按钮可用", async () => {
+    render(<App deps={deps} />);
+    await switchToTargeted();
+    await user.click(screen.getByRole("button", { name: "开始采集" }));
+    await waitFor(() => expect(screen.getByText(/已完成/)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "导出 Excel" })).toBeEnabled();
+  });
+
+  it("PARTIAL_COMPLETED 任务导出按钮可用且不当失败展示", async () => {
+    const partial: TaskRunSummary = { ...taskSummary, status: "PARTIAL_COMPLETED", statusZh: "部分完成", controlable: false };
+    const api = makeApi({ createTask: vi.fn(async () => ({ task: partial, idempotencyResult: "created" as const })) });
+    render(<App deps={{ api }} />);
+    await switchToTargeted();
+    await user.click(screen.getByRole("button", { name: "开始采集" }));
+    await waitFor(() => expect(screen.getByText(/部分完成/)).toBeInTheDocument());
+    expect(screen.queryByText(/失败/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导出 Excel" })).toBeEnabled();
   });
 });
