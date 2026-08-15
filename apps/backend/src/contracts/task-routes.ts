@@ -4,7 +4,10 @@ import type { Repositories } from "@stellaris/db";
 import { createRepositories } from "@stellaris/db";
 import { mapResultRowToView } from "@stellaris/db";
 import { createEvidenceStore, type EvidenceStore } from "@stellaris/evidence";
-import { exportResultRows } from "@stellaris/exporter";
+import { projectBiographyResultRows, renderBiographyResultRows } from "@stellaris/exporter";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { BIOGRAPHY_EXCEL_MIME, buildBiographyTaskResultReader, projectExportReadiness, readBiographyResultsForTask } from "./biography-export.js";
 import type { SafeEgressPolicy } from "@stellaris/crawler/safe-egress.js";
 import type { SiteAdapter } from "@stellaris/crawler/adapter/loader.js";
 import type { RunTaskPipeline } from "../workers/replay-driver.js";
@@ -336,40 +339,50 @@ export async function registerTaskRoutes(
     },
   );
 
-  // Excel 导出（Task 12 实现；重复请求返回既有 export_artifact）。
+  // Biography Excel 导出（STEP 18）：BiographyUrlResult → .xlsx Artifact → 直接回传文件。
   app.get<{ Params: { id: string } }>("/api/tasks/:id/export", async (req, reply) => {
     const taskId = req.params.id;
     const owned = await requireOwnedTask(req, reply, repos, taskId);
     if (!owned) return reply;
+
+    const readiness = projectExportReadiness(owned.task.status);
+    if (readiness === "NOT_TERMINAL") {
+      return reply.code(409).send({ error: "TASK_NOT_READY" });
+    }
+    if (readiness === "NOT_FINAL_EXPORTABLE") {
+      return reply.code(409).send({ error: "TASK_NOT_EXPORTABLE" });
+    }
+
+    // 幂等：同任务重复导出直接回传既有 artifact（文件丢失时重建）。
     const existing = await repos.exportArtifact.findLatestByTask(taskId);
     if (existing) {
-      return {
-        taskRunId: taskId,
-        filename: existing.filename,
-        rowCount: existing.row_count,
-        contentHash: existing.content_hash,
-        generatedAt: existing.generated_at,
-        downloadUrl: `/api/tasks/${taskId}/export/download/${existing.filename}`,
-      };
+      const existingBytes = await readFileOrNull(join(exportRoot, existing.filename));
+      if (existingBytes !== null) {
+        return sendBiographyFile(reply, existing.filename, existingBytes);
+      }
     }
-    const rows = await repos.resultRow.listByTask(taskId);
-    const views = rows.map(mapResultRowToView);
-    const out = await exportResultRows({ taskRunId: taskId, rows: views, exportDir: exportRoot });
-    await repos.exportArtifact.save({
-      taskRunId: taskId,
-      filename: out.filename,
-      rowCount: out.rowCount,
-      contentHash: out.contentHash,
-      generatedAt: out.generatedAt,
-    });
-    return {
-      taskRunId: taskId,
-      filename: out.filename,
-      rowCount: out.rowCount,
-      contentHash: out.contentHash,
-      generatedAt: out.generatedAt,
-      downloadUrl: `/api/tasks/${taskId}/export/download/${out.filename}`,
-    };
+
+    try {
+      const taskReader = buildBiographyTaskResultReader(repos);
+      const results = await readBiographyResultsForTask(taskReader, repos, taskId);
+      if (!results || results.length === 0) {
+        return reply.code(409).send({ error: "TASK_NOT_EXPORTABLE" });
+      }
+      const rows = projectBiographyResultRows(results);
+      const out = await renderBiographyResultRows({ taskRunId: taskId, rows, exportDir: exportRoot });
+      await repos.exportArtifact.save({
+        taskRunId: taskId,
+        filename: out.filename,
+        rowCount: out.rowCount,
+        contentHash: out.contentHash,
+        generatedAt: out.generatedAt,
+      });
+      const bytes = await readFile(out.filePath);
+      return sendBiographyFile(reply, out.filename, bytes);
+    } catch (error) {
+      req.log.error(error);
+      return reply.code(500).send({ error: "ARTIFACT_GENERATION_FAILED" });
+    }
   });
 
   // SSE 事件流（断线按 seq 续传；只传用户可见中文状态与安全摘要）。
@@ -618,4 +631,21 @@ export function matchDeclaredInstitution(
   }
 
   return null;
+}
+
+/** 读取导出文件；不存在/读失败返回 null（artifact 可重建）。 */
+async function readFileOrNull(filePath: string): Promise<Buffer | null> {
+  try {
+    return await readFile(filePath);
+  } catch {
+    return null;
+  }
+}
+
+/** 以附件形式回传 .xlsx 文件（不暴露服务器绝对路径）。 */
+function sendBiographyFile(reply: FastifyReply, filename: string, bytes: Buffer) {
+  return reply
+    .header("Content-Type", BIOGRAPHY_EXCEL_MIME)
+    .header("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+    .send(bytes);
 }

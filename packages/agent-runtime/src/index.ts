@@ -37,3 +37,4 @@ export * from "./smoke/deepseek-smoke.js";
 export * from "./smoke/search-smoke.js";
 export * from "./smoke/fetch-smoke.js";
 export * from "./smoke/render-smoke.js";
+export * from "./results/biography-task-result-reader.js";

@@ -4,3 +4,4 @@
  */
 export * from "./excel.js";
 export const EXPORTER_PACKAGE_NAME = "@stellaris/exporter" as const;
+export * from "./biography-excel.js";
