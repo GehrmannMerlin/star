@@ -51,11 +51,14 @@ async function runWithBoundedConcurrency(
   packets: InstitutionWorkPacket[],
   run: PacketWorkflowRunner,
   limit: number,
+  signal?: AbortSignal,
 ): Promise<PacketRunResult[]> {
   const results: PacketRunResult[] = new Array<PacketRunResult>(packets.length);
   let next = 0;
   const worker = async (): Promise<void> => {
     for (;;) {
+      // 取消：不再领取剩余 packet（已运行 packet 经同一 cancellation tree 中止）。
+      if (signal?.aborted) return;
       const index = next;
       next += 1;
       if (index >= packets.length) return;
@@ -64,6 +67,8 @@ async function runWithBoundedConcurrency(
       try {
         results[index] = await run(packet);
       } catch (error) {
+        // 取消：control-flow cancellation 向上传播（不作为 per-packet FAILED 吞掉）。
+        if (signal?.aborted) throw error;
         results[index] = {
           packetId: packet.packetId,
           status: "FAILED",
@@ -89,11 +94,11 @@ export class MultiInstitutionBiographyCoordinator {
 
   async run(
     frozen: InventorySubmissionPayload,
-    opts?: { regionCode?: string },
+    opts?: { regionCode?: string; signal?: AbortSignal },
   ): Promise<MultiInstitutionBiographyCoordinatorResult> {
     const packets = await this.deps.packetStore.createFromFrozenInventory(frozen, opts);
     const concurrency = this.deps.concurrency ?? DEFAULT_BIOGRAPHY_COORDINATOR_CONCURRENCY;
-    const results = await runWithBoundedConcurrency(packets, this.deps.runPacket, concurrency);
+    const results = await runWithBoundedConcurrency(packets, this.deps.runPacket, concurrency, opts?.signal);
     return { packets, results };
   }
 }

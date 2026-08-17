@@ -326,6 +326,9 @@ export class InstitutionBiographyWorkflowRunner implements InstitutionBiographyW
 
   async run(packet: InstitutionWorkPacket): Promise<InstitutionBiographyWorkflowResult> {
     const startedAt = Date.now();
+    // 取消：Task-level signal 在阶段边界协作中止；正在进行的 Pi session 由 stage runner 的 session.abort() 中止。
+    const signal = this.deps.abortSignal;
+    const checkAbort = (): void => signal?.throwIfAborted();
     const store = new InMemoryInstitutionWorkPacketStore();
     store.seed(packet);
     const stages = this.deps.stages ?? (await buildRealStageRunners(this.deps));
@@ -342,6 +345,7 @@ export class InstitutionBiographyWorkflowRunner implements InstitutionBiographyW
 
     try {
       // ── Investigator ──
+      checkAbort();
       const investigationEventSink = new MemoryToolEventSink();
       const investigation = await stages.runInvestigator({
         packetId: packet.packetId,
@@ -390,6 +394,7 @@ export class InstitutionBiographyWorkflowRunner implements InstitutionBiographyW
       }
 
       // ── Evidence ──
+      checkAbort();
       const evidenceEventSink = new MemoryToolEventSink();
       const evidence = await stages.runEvidence({
         packetId: packet.packetId,
@@ -433,6 +438,7 @@ export class InstitutionBiographyWorkflowRunner implements InstitutionBiographyW
       ]);
 
       // ── Reviewer Round-1 ──
+      checkAbort();
       const reviewEventSink = new MemoryToolEventSink();
       const reviewer = await stages.runReviewer({
         packetId: packet.packetId,
@@ -483,6 +489,7 @@ export class InstitutionBiographyWorkflowRunner implements InstitutionBiographyW
       ]);
 
       // ── Recovery ──
+      checkAbort();
       const recoveryEventSink = new MemoryToolEventSink();
       const recovery = await stages.runRecovery({
         packetId: packet.packetId,
@@ -526,6 +533,7 @@ export class InstitutionBiographyWorkflowRunner implements InstitutionBiographyW
       ]);
 
       // ── Re-review Round-2（复用 RecoveryRereviewCoordinator；不重写 review/recovery 循环）──
+      checkAbort();
       const rereviewEventSink = new MemoryToolEventSink();
       const coordinator = new RecoveryRereviewCoordinator({
         rehydrator: this.rehydrator,
@@ -576,6 +584,8 @@ export class InstitutionBiographyWorkflowRunner implements InstitutionBiographyW
         message: statusDetail(reviewerResult),
       });
     } catch (error) {
+      // 取消：control-flow cancellation 向上传播（不作为 workflow FAILED 吞掉）。
+      if (signal?.aborted) throw error;
       return fail({
         stage: "workflow",
         message: redactSecrets(error instanceof Error ? error.message : String(error)),

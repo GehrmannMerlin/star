@@ -54,7 +54,7 @@ export type BiographyTaskTerminalStatus = "COMPLETED" | "PARTIAL_COMPLETED" | "F
 
 /** Worker 对执行器的可见契约（runTaskJob 只依赖 run）。 */
 export interface BiographyTaskExecutor {
-  run(taskRunId: string): Promise<void>;
+  run(taskRunId: string, opts?: { signal?: AbortSignal }): Promise<void>;
 }
 
 export type BiographyTaskExecutionServiceDeps = {
@@ -219,7 +219,7 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
   }
 
   /** Worker 入口：claim → 编排 → 终态。重复投递/终态任务安全。 */
-  async run(taskRunId: string): Promise<void> {
+  async run(taskRunId: string, opts?: { signal?: AbortSignal }): Promise<void> {
     const task = await this.repos.taskRun.findById(taskRunId);
     if (!task) throw new Error(`任务不存在: ${taskRunId}`);
     if (terminalStatuses().includes(task.status)) {
@@ -229,10 +229,15 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
     if (!claimed) {
       return; // 已被其它 Worker 领取（或状态不可领取）→ 不启动第二套 Agent Workflow。
     }
+    // 取消：Task-level signal（runTaskJob 经 getTaskSignal 传入；缺省回退构造期静态 budget）。
+    const signal = opts?.signal ?? this.abortSignal;
+    if (signal?.aborted) return; // 已取消：不启动 Agent Workflow（终态已由 cancelTask 持久化）。
     const emit = (e: SseEvent): void => this.emit(taskRunId, e);
     try {
-      await this.execute(claimed, emit);
+      await this.execute(claimed, emit, signal);
     } catch (error) {
+      // 取消：control-flow cancellation → 直接返回（不记 FAILED、不重抛 → Graphile 不重试）。
+      if (signal?.aborted) return;
       const message = redactSecrets(error instanceof Error ? error.message : String(error));
       // 系统异常：如实记 FAILED，再向上抛（Graphile 重试 → 终态 fast-path no-op）。
       await this.repos.taskRun.complete(taskRunId, "FAILED", message).catch(() => undefined);
@@ -240,7 +245,11 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
     }
   }
 
-  private async execute(task: TaskRunRow, emit: (e: SseEvent) => void): Promise<void> {
+  private async execute(
+    task: TaskRunRow,
+    emit: (e: SseEvent) => void,
+    signal: AbortSignal | undefined,
+  ): Promise<void> {
     emit({ type: "task.state_changed", taskRunId: task.id, status: "PREPARING", statusZh: "正在准备", seq: 1 });
 
     const scopes = await this.repos.targetScope.listByTask(task.id);
@@ -258,6 +267,7 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
       frozen = buildTargetedFrozenInventory(snapshot, scope.region_level);
     } else if (task.mode === "FULL_INSTITUTION") {
       const inventoryResult = await this.inventoryRunner.run({ regionCode, mode: "FULL" });
+      if (signal?.aborted) return; // 取消：不推进后续编排（终态已持久化）。
       if (inventoryResult.status !== "COMPLETED") {
         const reason = inventoryFailureReason(inventoryResult);
         await this.repos.taskRun.complete(task.id, "FAILED", reason);
@@ -277,31 +287,37 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
     await this.repos.taskRun.setProgress(task.id, { totalInstitutions: expectedPackets });
 
     // ── 每任务 fresh Workflow + Coordinator（不跨任务共享 Agent Session）──
-    const workflow = this.workflow ?? (await this.buildRealWorkflow());
+    const workflow = this.workflow ?? (await this.buildRealWorkflow(signal));
     const packetStore = new PostgresInstitutionWorkPacketStore(this.repos.institutionWorkPacket);
     const collected = new Map<string, InstitutionBiographyWorkflowResult>();
     const coordinator = new MultiInstitutionBiographyCoordinator({
       packetStore,
       concurrency: this.concurrency,
-      runPacket: createBiographyPacketWorkflowRunner(workflow, (result) => {
-        collected.set(result.packetId, result);
-        // 逐 Packet 完成：原子自增 + SSE 进度（不记录每次 search/fetch/inspect —— 那些已有 ToolEvent）。
-        void this.repos.taskRun
-          .incrementProcessed(task.id)
-          .then((row) =>
-            emit({
-              type: "task.progress_changed",
-              taskRunId: task.id,
-              processedInstitutions: row.processed_institutions,
-              totalInstitutions: row.total_institutions,
-              seq: 10,
-            }),
-          )
-          .catch(() => undefined);
-      }),
+      runPacket: createBiographyPacketWorkflowRunner(
+        workflow,
+        (result) => {
+          collected.set(result.packetId, result);
+          // 逐 Packet 完成：原子自增 + SSE 进度（不记录每次 search/fetch/inspect —— 那些已有 ToolEvent）。
+          void this.repos.taskRun
+            .incrementProcessed(task.id)
+            .then((row) =>
+              emit({
+                type: "task.progress_changed",
+                taskRunId: task.id,
+                processedInstitutions: row?.processed_institutions ?? 0,
+                totalInstitutions: row?.total_institutions ?? 0,
+                seq: 10,
+              }),
+            )
+            .catch(() => undefined);
+        },
+        signal,
+      ),
     });
 
-    const { packets } = await coordinator.run(frozen, { regionCode });
+    const { packets } = await coordinator.run(frozen, { regionCode, ...(signal ? { signal } : {}) });
+    // 取消：不再聚合 / 投影 / 写终态（终态已由 cancelTask 持久化为 CANCELLED）。
+    if (signal?.aborted) return;
     await this.repos.taskRun.setProgress(task.id, { totalInstitutions: packets.length });
 
     // ── 聚合 + 确定性终态投影 + Task Result 投影 ──
@@ -336,7 +352,7 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
   }
 
   /** 真实 per-packet Workflow（与 STEP 16 一致的持久化 identity 组装）。 */
-  private async buildRealWorkflow(): Promise<InstitutionBiographyWorkflowPort> {
+  private async buildRealWorkflow(signal?: AbortSignal): Promise<InstitutionBiographyWorkflowPort> {
     await this.skillRuntime.reload();
     const identity = await this.skillRuntime.resolveSkill(OFFICIAL_BIOGRAPHY_SKILL_NAME);
     const modelResolver = await this.modelResolverPromise;
@@ -346,7 +362,7 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
       modelResolver,
       skill: { name: identity.name, version: identity.version },
       persistence: this.buildPersistence(),
-      ...(this.abortSignal ? { abortSignal: this.abortSignal } : {}),
+      ...(signal ? { abortSignal: signal } : {}),
     });
   }
 

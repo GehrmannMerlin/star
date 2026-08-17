@@ -22,6 +22,7 @@ import type {
 export function createBiographyPacketWorkflowRunner(
   workflow: InstitutionBiographyWorkflowPort,
   onResult?: (result: InstitutionBiographyWorkflowResult) => void,
+  signal?: AbortSignal,
 ): PacketWorkflowRunner {
   return async (packet) => {
     try {
@@ -34,6 +35,8 @@ export function createBiographyPacketWorkflowRunner(
         ...(result.failure ? { error: result.failure.message } : {}),
       };
     } catch (error) {
+      // 取消：control-flow cancellation 向上传播（不作为 per-packet FAILED 吞掉）。
+      if (signal?.aborted) throw error;
       return {
         packetId: packet.packetId,
         status: "FAILED",

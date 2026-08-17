@@ -9,6 +9,7 @@ import type { RunTaskPipeline } from "./replay-driver.js";
 import type { RunMultiInstitutionPipeline } from "./multi-institution-driver.js";
 import type { RunMultiRegionPipeline } from "./multi-region-driver.js";
 import type { BiographyTaskExecutor } from "./biography-task-service.js";
+import { getTaskSignal } from "./task-signal.js";
 import { newTraceId, type SseEvent } from "@stellaris/contracts";
 import { emitWithMetrics } from "../contracts/task-routes.js";
 
@@ -98,6 +99,9 @@ export async function runTaskJob(deps: WorkerDeps, taskRunId: string): Promise<v
   }
   log("task", `开始 ${task.mode} ${taskRunId}`);
 
+  // 取消：Task-level signal（进程内注册表；cancelTask 的 abortTask 命中同一 AbortController）。
+  const signal = getTaskSignal(taskRunId);
+
   const base = {
     taskRunId,
     repos: deps.repos,
@@ -110,13 +114,14 @@ export async function runTaskJob(deps: WorkerDeps, taskRunId: string): Promise<v
     },
     evidenceRoot: deps.evidenceRoot,
     ...(deps.browserPool ? { browserPool: deps.browserPool } : {}),
+    signal,
   };
 
   switch (task.mode) {
     case "TARGETED": {
       if (deps.biographyExecutor) {
         log("pipeline", "TARGETED Biography Agent");
-        await deps.biographyExecutor.run(taskRunId);
+        await deps.biographyExecutor.run(taskRunId, { signal });
         log("pipeline", "TARGETED Biography Agent 完成");
         break;
       }
@@ -131,7 +136,7 @@ export async function runTaskJob(deps: WorkerDeps, taskRunId: string): Promise<v
       // STEP 17：Biography 运行时接管单行政区 FULL_INSTITUTION；多行政区（regionCodes）仍走 legacy。
       if (deps.biographyExecutor && !hasRegionCodes) {
         log("pipeline", "FULL_INSTITUTION Biography Agent");
-        await deps.biographyExecutor.run(taskRunId);
+        await deps.biographyExecutor.run(taskRunId, { signal });
         log("pipeline", "FULL_INSTITUTION Biography Agent 完成");
         break;
       }

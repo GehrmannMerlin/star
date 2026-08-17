@@ -2,6 +2,14 @@ import type { Kysely, Transaction } from "kysely";
 import type { Database, TaskRunRow } from "../schema.js";
 import type { TaskMode, TaskRunStatus, ExpandLevel } from "@stellaris/contracts";
 
+/** 终态集合：一旦进入终态，任何后续状态推进/进度/结果投影都不得再覆盖（取消竞态保护，规格 §5.4/§18.4）。 */
+const TERMINAL_STATUSES: ReadonlyArray<TaskRunStatus> = [
+  "COMPLETED",
+  "PARTIAL_COMPLETED",
+  "FAILED",
+  "CANCELLED",
+];
+
 /**
  * task_run 仓储（规格 §16.1 范围层）。
  * 负责任务创建（幂等）、状态推进与完成记录。
@@ -49,25 +57,27 @@ export class TaskRunRepository {
     return existing;
   }
 
-  /** 更新任务状态并返回更新后的行。 */
+  /** 更新任务状态并返回更新后的行；终态任务不再被覆盖（取消竞态保护）。 */
   async setStatus(
     taskRunId: string,
     status: TaskRunStatus,
-  ): Promise<TaskRunRow> {
+  ): Promise<TaskRunRow | undefined> {
     return this.db
       .updateTable("task_run")
       .set({ status })
       .where("id", "=", taskRunId)
+      .where("status", "not in", TERMINAL_STATUSES)
       .returningAll()
-      .executeTakeFirstOrThrow();
+      .executeTakeFirst();
   }
 
-  /** 任务开始。 */
+  /** 任务开始；终态任务（如已取消）不再被覆盖。 */
   async markStarted(taskRunId: string): Promise<void> {
     await this.db
       .updateTable("task_run")
       .set({ status: "CRAWLING", started_at: new Date().toISOString() })
       .where("id", "=", taskRunId)
+      .where("status", "not in", TERMINAL_STATUSES)
       .execute();
   }
 
@@ -89,20 +99,21 @@ export class TaskRunRepository {
 
   /**
    * 推进机构处理计数（原子自增，规格 §20.2 真实计数）。
-   * 返回更新后的任务行。
+   * 返回更新后的任务行；终态任务（如已取消）不再累加。
    */
-  async incrementProcessed(taskRunId: string): Promise<TaskRunRow> {
+  async incrementProcessed(taskRunId: string): Promise<TaskRunRow | undefined> {
     return this.db
       .updateTable("task_run")
       .set((eb) => ({
         processed_institutions: eb("processed_institutions", "+", 1),
       }))
       .where("id", "=", taskRunId)
+      .where("status", "not in", TERMINAL_STATUSES)
       .returningAll()
-      .executeTakeFirstOrThrow();
+      .executeTakeFirst();
   }
 
-  /** 完成任务（设置终态与完成时间）。 */
+  /** 完成任务（设置终态与完成时间）；终态任务（如已取消）不再被覆盖。 */
   async complete(
     taskRunId: string,
     status: "COMPLETED" | "PARTIAL_COMPLETED" | "FAILED",
@@ -116,6 +127,7 @@ export class TaskRunRepository {
         ...(errorMessage ? { error_message: errorMessage } : {}),
       })
       .where("id", "=", taskRunId)
+      .where("status", "not in", TERMINAL_STATUSES)
       .execute();
   }
 
@@ -133,7 +145,7 @@ export class TaskRunRepository {
       recoveryCount?: number;
       blockedCount?: number;
     },
-  ): Promise<TaskRunRow> {
+  ): Promise<TaskRunRow | undefined> {
     const set: Record<string, number> = {};
     if (patch.totalInstitutions !== undefined) set.total_institutions = patch.totalInstitutions;
     if (patch.processedInstitutions !== undefined) set.processed_institutions = patch.processedInstitutions;
@@ -144,8 +156,9 @@ export class TaskRunRepository {
       .updateTable("task_run")
       .set(set)
       .where("id", "=", taskRunId)
+      .where("status", "not in", TERMINAL_STATUSES)
       .returningAll()
-      .executeTakeFirstOrThrow();
+      .executeTakeFirst();
   }
 
   /**
@@ -157,13 +170,14 @@ export class TaskRunRepository {
   async setResultSummary(
     taskRunId: string,
     summary: unknown,
-  ): Promise<TaskRunRow> {
+  ): Promise<TaskRunRow | undefined> {
     return this.db
       .updateTable("task_run")
       .set({ result_summary: summary })
       .where("id", "=", taskRunId)
+      .where("status", "not in", TERMINAL_STATUSES)
       .returningAll()
-      .executeTakeFirstOrThrow();
+      .executeTakeFirst();
   }
 
   /** 查询任务。 */

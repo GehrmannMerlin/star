@@ -503,4 +503,28 @@ describe("InstitutionBiographyWorkflowRunner (real workflow composition)", () =>
       state: "POSITION_DECIDED",
     });
   });
+
+  it("STEP 19.1: abort signal 在阶段边界传播（reject），不吞成 workflow FAILED", async () => {
+    const { persistence } = createTestPersistence();
+    const packets = await createPackets(persistence.packetStore);
+    const controller = new AbortController();
+    const stages: WorkflowStageRunners = {
+      runInvestigator: async (input) => {
+        controller.abort(new Error("task cancelled"));
+        return completedInvestigation(input);
+      },
+      runEvidence: completedEvidence,
+      runReviewer: (input) => completedReviewer(input, approvedReviewPayload("cand-p1", "cand-p2")),
+      runRecovery: completedRecovery,
+    };
+    const runner = new InstitutionBiographyWorkflowRunner({
+      ...makeDeps(persistence, stages),
+      abortSignal: controller.signal,
+    });
+
+    // cancellation 是 control-flow：阶段边界 checkAbort 抛错并向上传播，而非返回 FAILED 结果。
+    await expect(runner.run(packets[0]!)).rejects.toThrow("task cancelled");
+    // Evidence 阶段未启动（checkAbort 在其前触发）。
+    expect(await persistence.packetStore.get(packets[0]!.packetId)).toMatchObject({ state: "EVIDENCE_PENDING" });
+  });
 });
