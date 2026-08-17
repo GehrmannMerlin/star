@@ -179,3 +179,39 @@ describe("MultiInstitutionBiographyCoordinator real-workflow wiring", () => {
     expect(batch.results.map((r) => r.status).sort()).toEqual(["FAILED", "RESOLVED"]);
   });
 });
+
+/** STEP 19.1: Coordinator 取消 —— signal.aborted 后不再领取剩余 packet，且 cancellation 向上传播。 */
+describe("MultiInstitutionBiographyCoordinator cancellation", () => {
+  it("signal aborted mid-run → 剩余 packet 不再调度", async () => {
+    const store = new PostgresInstitutionWorkPacketStore(new FakePacketRepo());
+    const controller = new AbortController();
+    let started = 0;
+    const coordinator = new MultiInstitutionBiographyCoordinator({
+      packetStore: store,
+      concurrency: 1,
+      runPacket: async (packet) => {
+        started += 1;
+        if (started === 1) controller.abort(new Error("cancel"));
+        return { packetId: packet.packetId, status: "SUCCESS", state: packet.state };
+      },
+    });
+
+    await coordinator.run(frozenWith(3), { signal: controller.signal });
+    expect(started).toBe(1); // 仅第一个 packet 运行，其余 2 个未启动。
+  });
+
+  it("cancellation 经 runPacket 抛错时向上传播（reject），不被吞成 per-packet FAILED", async () => {
+    const store = new PostgresInstitutionWorkPacketStore(new FakePacketRepo());
+    const controller = new AbortController();
+    const coordinator = new MultiInstitutionBiographyCoordinator({
+      packetStore: store,
+      concurrency: 1,
+      runPacket: async () => {
+        controller.abort(new Error("cancel"));
+        throw new Error("stage aborted");
+      },
+    });
+
+    await expect(coordinator.run(frozenWith(2), { signal: controller.signal })).rejects.toThrow("stage aborted");
+  });
+});
