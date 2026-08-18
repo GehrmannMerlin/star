@@ -13,6 +13,7 @@ import type { SiteAdapter } from "@stellaris/crawler/adapter/loader.js";
 import type { RunTaskPipeline } from "../workers/replay-driver.js";
 import type { RunMultiInstitutionPipeline } from "../workers/multi-institution-driver.js";
 import type { RunMultiRegionPipeline } from "../workers/multi-region-driver.js";
+import type { BiographyTaskExecutor } from "../workers/biography-task-service.js";
 import { expandRegions } from "@stellaris/contracts";
 import { pauseTask, resumeTask, cancelTask, duplicateTask } from "../workers/task-control.js";
 import type { TaskControlDeps } from "../workers/task-control.js";
@@ -47,11 +48,13 @@ export interface TaskRoutesDeps {
   exportRoot: string;
   /** P5：Graphile Worker 队列投递（生产注入；缺省回退直接调驱动，测试兼容）。 */
   enqueueTask?: EnqueueTaskFn;
+  /** STEP 19.3：Biography Agent Task Runtime 执行器（供 resume/崩溃恢复统一路由）。 */
+  biographyExecutor?: BiographyTaskExecutor;
 }
 
 /** 从 TaskRoutesDeps 构造任务控制依赖（供路由与崩溃恢复复用，规格 §19.1）。 */
 export function toControlDeps(deps: TaskRoutesDeps): TaskControlDeps {
-  const { repos, evidenceStore, runTaskPipeline, runMultiInstitutionPipeline, runMultiRegionPipeline, policy, fixtureUrl, adapter, evidenceRoot } = deps;
+  const { repos, evidenceStore, runTaskPipeline, runMultiInstitutionPipeline, runMultiRegionPipeline, policy, fixtureUrl, adapter, evidenceRoot, biographyExecutor } = deps;
   return {
     repos,
     evidenceStore,
@@ -61,6 +64,7 @@ export function toControlDeps(deps: TaskRoutesDeps): TaskControlDeps {
     runTaskPipeline,
     ...(runMultiInstitutionPipeline ? { runMultiInstitutionPipeline } : {}),
     ...(runMultiRegionPipeline ? { runMultiRegionPipeline } : {}),
+    ...(biographyExecutor ? { biographyExecutor } : {}),
     emit: pushSseEvent,
     evidenceRoot,
   };
@@ -464,7 +468,56 @@ const TERMINAL_STATUSES = new Set([
   "CANCELLED",
 ]);
 
-/** 任务行 → 用户可见摘要（含 controlable，规格 §19.1）。 */
+/**
+ * 任务 Agent 运行阶段投影（STEP 19.3）。
+ * agent_stage 优先（Biography 运行时业务边界写入）；legacy 任务（agent_stage 为 null）
+ * 从 status/progress 推导稳定 stage。不与 TaskRunStatus 重复。
+ */
+function projectTaskStage(task: {
+  status: string;
+  agent_stage: string | null;
+  total_institutions: number | string;
+  processed_institutions: number | string;
+  reviewed_slots: number | string;
+}): import("@stellaris/contracts").TaskStage {
+  // 终态优先：异常路径（系统异常 / cancel）agent_stage 可能停留在中间阶段，以 status 为准。
+  if (task.status === "COMPLETED") return "COMPLETED";
+  if (task.status === "PARTIAL_COMPLETED") return "PARTIAL_COMPLETED";
+  if (task.status === "FAILED") return "FAILED";
+  if (task.status === "CANCELLED") return "CANCELLED";
+  if (task.agent_stage) return task.agent_stage as import("@stellaris/contracts").TaskStage;
+  switch (task.status) {
+    case "PENDING":
+      return "QUEUED";
+    case "PREPARING":
+      return "PREPARING";
+    case "CRAWLING": {
+      const total = Number(task.total_institutions);
+      const processed = Number(task.processed_institutions);
+      const reviewed = Number(task.reviewed_slots);
+      if (total === 0) return "INVENTORY_DISCOVERY";
+      if (processed === 0) return "INVENTORY_FROZEN";
+      if (reviewed > 0) return "REVIEWING";
+      return "INVESTIGATING";
+    }
+    case "RECOVERING":
+      return "RECOVERING";
+    case "GENERATING":
+      return "FINALIZING";
+    case "COMPLETED":
+      return "COMPLETED";
+    case "PARTIAL_COMPLETED":
+      return "PARTIAL_COMPLETED";
+    case "FAILED":
+      return "FAILED";
+    case "CANCELLED":
+      return "CANCELLED";
+    default:
+      return "QUEUED";
+  }
+}
+
+/** 任务行 → 用户可见摘要（含 controlable，规格 §19.1；含 stage/currentInstitution，STEP 19.3）。 */
 function toTaskSummary(task: {
   id: string;
   status: string;
@@ -480,6 +533,8 @@ function toTaskSummary(task: {
   started_at: string | null;
   finished_at: string | null;
   error_message: string | null;
+  agent_stage: string | null;
+  current_institution: string | null;
 }): import("@stellaris/contracts").TaskRunSummary {
   return {
     id: task.id,
@@ -497,6 +552,8 @@ function toTaskSummary(task: {
     ...(task.started_at ? { startedAt: task.started_at } : {}),
     ...(task.finished_at ? { finishedAt: task.finished_at } : {}),
     ...(task.error_message ? { errorMessage: task.error_message } : {}),
+    stage: projectTaskStage(task),
+    ...(task.current_institution ? { currentInstitution: task.current_institution } : {}),
     controlable: !TERMINAL_STATUSES.has(task.status),
   };
 }

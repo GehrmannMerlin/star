@@ -98,6 +98,17 @@ export async function buildApp(deps: ServerDeps = {}): Promise<FastifyInstance> 
     exportRoot,
     ...(deps.pgPool ? { enqueueTask: makeEnqueueTask(deps.pgPool) } : {}),
   };
+  // STEP 19.3：Biography Agent Task Runtime（后台配置，非用户请求字段）——
+  // 提前构造一次，供 Worker 主链 + resume/崩溃恢复（task-control）统一路由。
+  const biographyExecutor =
+    deps.biographyExecutor ??
+    (deps.pgPool && process.env.STELLARIS_WORKER === "1" && process.env.STELLARIS_TASK_RUNTIME === "biography"
+      ? await createBiographyTaskExecutor(db, repos)
+      : undefined);
+  if (biographyExecutor) {
+    (taskRoutesDeps as { biographyExecutor?: unknown }).biographyExecutor = biographyExecutor;
+  }
+
   await registerTaskRoutes(app, taskRoutesDeps);
 
   // 崩溃恢复：启动时扫描未完成任务并重新拉起驱动（规格 §18.2）。
@@ -107,12 +118,6 @@ export async function buildApp(deps: ServerDeps = {}): Promise<FastifyInstance> 
   // P5：启动 Graphile Worker 持久队列（STELLARIS_WORKER=1 或提供 pgPool 时）。
   if (deps.pgPool && process.env.STELLARIS_WORKER === "1") {
     const { runWorker } = await import("./workers/queue.js");
-    // STEP 17：服务器后台配置选择 Biography Agent Task Runtime（缺省 legacy）。
-    const biographyExecutor =
-      deps.biographyExecutor ??
-      (process.env.STELLARIS_TASK_RUNTIME === "biography"
-        ? await createBiographyTaskExecutor(db, repos)
-        : undefined);
     const stopWorker = await runWorker({
       pgPool: deps.pgPool,
       repos,

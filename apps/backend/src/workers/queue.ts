@@ -132,15 +132,18 @@ export async function runTaskJob(deps: WorkerDeps, taskRunId: string): Promise<v
     }
     case "FULL_INSTITUTION": {
       const scopes = await deps.repos.targetScope.listByTask(taskRunId);
-      const hasRegionCodes = scopes.length > 1;
-      // STEP 17：Biography 运行时接管单行政区 FULL_INSTITUTION；多行政区（regionCodes）仍走 legacy。
-      if (deps.biographyExecutor && !hasRegionCodes) {
+      // STEP 19.3：Biography 运行时可用时，FULL_INSTITUTION 统一进 Biography
+      // （Frozen Inventory 形成阶段差异由 BiographyTaskExecutionService 内部处理，
+      //  多行政区 scope 不再误走 legacy multi-region）；
+      // legacy multi-region / multi-institution 保留给无 biographyExecutor 的配置（测试/离线）。
+      if (deps.biographyExecutor) {
         log("pipeline", "FULL_INSTITUTION Biography Agent");
         await deps.biographyExecutor.run(taskRunId, { signal });
         log("pipeline", "FULL_INSTITUTION Biography Agent 完成");
         break;
       }
-      log("pipeline", "FULL_INSTITUTION 多机构");
+      const hasRegionCodes = scopes.length > 1;
+      log("pipeline", "FULL_INSTITUTION 多机构（legacy）");
       if (hasRegionCodes && deps.runMultiRegionPipeline) {
         await deps.runMultiRegionPipeline({
           ...base,
