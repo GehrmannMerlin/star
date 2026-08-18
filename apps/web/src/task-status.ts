@@ -22,3 +22,28 @@ export function isTerminalStatus(status: string): boolean {
 export function isExportableStatus(status: string): boolean {
   return EXPORTABLE_STATUSES.has(status);
 }
+
+/**
+ * Agent 运行阶段 → 中文展示（STEP 19.3）。
+ * 后端 TaskRunSummary.stage 是唯一事实来源（agent_stage 投影 / status 推导）。
+ */
+export const STAGE_ZH: Readonly<Record<string, string>> = {
+  QUEUED: "排队中",
+  PREPARING: "准备中",
+  INVENTORY_DISCOVERY: "机构发现",
+  INVENTORY_FROZEN: "机构冻结",
+  INVESTIGATING: "人员调查",
+  EVIDENCE_GATHERING: "证据采集",
+  REVIEWING: "复核中",
+  RECOVERING: "恢复处理",
+  FINALIZING: "结果生成",
+  COMPLETED: "已完成",
+  PARTIAL_COMPLETED: "部分完成",
+  FAILED: "采集失败",
+  CANCELLED: "已取消",
+};
+
+export function stageZh(stage: string | undefined): string {
+  if (!stage) return "—";
+  return STAGE_ZH[stage] ?? stage;
+}

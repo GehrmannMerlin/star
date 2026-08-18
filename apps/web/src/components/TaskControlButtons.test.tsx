@@ -21,6 +21,7 @@ const activeTask: TaskRunSummary = {
   recoveryCount: 0,
   blockedCount: 0,
   requestedAt: new Date().toISOString(),
+  stage: "INVESTIGATING",
   controlable: true,
 };
 

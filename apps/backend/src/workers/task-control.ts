@@ -6,6 +6,7 @@ import type { SiteAdapter } from "@stellaris/crawler/adapter/loader.js";
 import type { RunTaskPipeline } from "./replay-driver.js";
 import type { RunMultiInstitutionPipeline } from "./multi-institution-driver.js";
 import type { RunMultiRegionPipeline } from "./multi-region-driver.js";
+import type { BiographyTaskExecutor } from "./biography-task-service.js";
 import { getTaskSignal, abortTask, resetTaskSignal } from "./task-signal.js";
 
 /**
@@ -26,6 +27,8 @@ export interface TaskControlDeps {
   runTaskPipeline: RunTaskPipeline;
   runMultiInstitutionPipeline?: RunMultiInstitutionPipeline;
   runMultiRegionPipeline?: RunMultiRegionPipeline;
+  /** STEP 19.3：Biography Agent Task Runtime 执行器（resume / 崩溃恢复优先路由）。 */
+  biographyExecutor?: BiographyTaskExecutor;
   emit: (taskId: string, e: SseEvent) => void;
   evidenceRoot: string;
 }
@@ -66,10 +69,18 @@ const CANCELLABLE: ReadonlySet<TaskRunStatus> = new Set<TaskRunStatus>([
 
 /** 按任务模式重新拉起对应驱动（resume / 崩溃恢复复用）。 */
 export function relaunchPipeline(taskRunId: string, task: TaskRunRow, deps: TaskControlDeps): void {
-  const { repos, evidenceStore, policy, fixtureUrl, adapter, runTaskPipeline, runMultiInstitutionPipeline, runMultiRegionPipeline, emit, evidenceRoot } = deps;
+  const { repos, evidenceStore, policy, fixtureUrl, adapter, runTaskPipeline, runMultiInstitutionPipeline, runMultiRegionPipeline, biographyExecutor, emit, evidenceRoot } = deps;
   resetTaskSignal(taskRunId);
   const signal = getTaskSignal(taskRunId);
   const base = { taskRunId, repos, evidenceStore, policy, emit: (e: SseEvent) => emit(taskRunId, e), evidenceRoot, signal };
+  // STEP 19.3：Biography 运行时可用时，resume / 崩溃恢复统一经 BiographyTaskExecutionService，
+  // 不再把 FULL / TARGETED 拉回 legacy 驱动（执行器内部处理 claim / 终态 / 取消）。
+  if (biographyExecutor) {
+    biographyExecutor.run(taskRunId, { signal }).catch((err) => {
+      process.stderr.write(`[task-control] 任务 ${taskRunId} Biography 驱动失败: ${err instanceof Error ? err.message : String(err)}\n`);
+    });
+    return;
+  }
   if (task.mode === "TARGETED") {
     if (fixtureUrl) {
       runTaskPipeline({ ...base, fixtureUrl }).catch((err) => {

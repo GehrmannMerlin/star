@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import {
+  composeToolEventSinks,
   createAgentToolRegistry,
   createSubmitInvestigationTool,
   MemoryToolEventSink,
   ToolGateway,
   type InvestigationSubmissionSink,
   type InvestigationSubmissionValidator,
+  type ToolEventSink,
 } from "@stellaris/agent-tools";
 import { ModelPolicy } from "../model/model-policy.js";
 import { PiModelResolver } from "../model/pi-model-resolver.js";
@@ -48,6 +50,8 @@ export type InvestigatorAgentRunnerDeps = {
   validator?: InvestigationSubmissionValidator;
   /** Override for tests/observability: tool event sink (in-memory default). */
   eventSink?: MemoryToolEventSink;
+  /** STEP 19.3：可选持久化 ToolEvent sink（Agent provenance 落库；gate 仍用内存 sink）。 */
+  persistentEventSink?: ToolEventSink;
   /** Dev-smoke-only budget: abort the Pi session on this signal. NEVER part of the business request. */
   abortSignal?: AbortSignal;
 };
@@ -88,7 +92,10 @@ export class InvestigatorAgentRunner {
     const registry = createAgentToolRegistry({
       submitInvestigationTool: createSubmitInvestigationTool({ validator, sink }),
     });
-    const gateway = new ToolGateway(registry, eventSink);
+    const gateway = new ToolGateway(
+      registry,
+      this.deps.persistentEventSink ? composeToolEventSinks(eventSink, this.deps.persistentEventSink) : eventSink,
+    );
 
     const modelPolicy = this.deps.modelPolicy ?? new ModelPolicy();
     const resolved = modelPolicy.resolve("INVESTIGATOR");

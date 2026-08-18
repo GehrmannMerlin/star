@@ -4,6 +4,7 @@ import {
   type InvestigatorEvidenceSubmissionSink,
   type RecoverySubmissionSink,
   type ReviewerDecisionSink,
+  type ToolEventSink,
 } from "@stellaris/agent-tools";
 import { InvestigatorEvidenceRunner } from "../evidence/investigator-evidence-runner.js";
 import type { InvestigatorEvidenceResult } from "../evidence/evidence-types.js";
@@ -102,11 +103,15 @@ export type WorkflowStageRunners = {
     packetId: string;
     store: InMemoryInstitutionWorkPacketStore;
     eventSink: MemoryToolEventSink;
+    /** STEP 19.3：可选持久化 ToolEvent sink（Agent provenance 落库）。 */
+    persistentEventSink?: ToolEventSink;
   }): Promise<InvestigationAgentResult>;
   runEvidence(input: {
     packetId: string;
     store: InMemoryInstitutionWorkPacketStore;
     eventSink: MemoryToolEventSink;
+    /** STEP 19.3：可选持久化 ToolEvent sink（Agent provenance 落库）。 */
+    persistentEventSink?: ToolEventSink;
     frozenInput: InvestigationSubmissionPayload;
     sink: InvestigatorEvidenceSubmissionSink;
   }): Promise<InvestigatorEvidenceResult>;
@@ -152,6 +157,8 @@ export type InstitutionBiographyWorkflowRunnerDeps = {
   persistence: InstitutionBiographyWorkflowPersistence;
   /** 测试 seam：覆盖默认真实阶段 Runner。 */
   stages?: WorkflowStageRunners;
+  /** STEP 19.3：阶段持久化 ToolEvent sink 工厂（Agent provenance 落库；缺省仅内存 gate）。 */
+  toolEventSinkFactory?: (identity: { packetId: string; role: string }) => ToolEventSink;
 };
 
 /** 极薄的 per-packet orchestration contract（STEP 16 目标接口）。 */
@@ -248,24 +255,26 @@ async function buildRealStageRunners(
   const abortSignal = deps.abortSignal;
 
   return {
-    runInvestigator: async ({ packetId, store, eventSink }) => {
+    runInvestigator: async ({ packetId, store, eventSink, persistentEventSink }) => {
       const runner = new InvestigatorAgentRunner({
         skillRuntime: deps.skillRuntime,
         packetStore: store,
         modelPolicy,
         modelResolver,
         eventSink,
+        ...(persistentEventSink ? { persistentEventSink } : {}),
         ...(abortSignal ? { abortSignal } : {}),
       });
       return runner.run({ packetId });
     },
-    runEvidence: async ({ packetId, store, eventSink, frozenInput, sink }) => {
+    runEvidence: async ({ packetId, store, eventSink, persistentEventSink, frozenInput, sink }) => {
       const runner = new InvestigatorEvidenceRunner({
         skillRuntime: deps.skillRuntime,
         packetStore: store,
         modelPolicy,
         modelResolver,
         eventSink,
+        ...(persistentEventSink ? { persistentEventSink } : {}),
         sink,
         ...(abortSignal ? { abortSignal } : {}),
       });
@@ -347,10 +356,14 @@ export class InstitutionBiographyWorkflowRunner implements InstitutionBiographyW
       // ── Investigator ──
       checkAbort();
       const investigationEventSink = new MemoryToolEventSink();
+      const investigationPersistent = this.deps.toolEventSinkFactory
+        ? this.deps.toolEventSinkFactory({ packetId: packet.packetId, role: "INVESTIGATOR" })
+        : undefined;
       const investigation = await stages.runInvestigator({
         packetId: packet.packetId,
         store,
         eventSink: investigationEventSink,
+        ...(investigationPersistent ? { persistentEventSink: investigationPersistent } : {}),
       });
       const investigationSessionId = stageAgentSessionId(investigation);
       const investigationModel = stageAgentModel(investigation);
@@ -396,10 +409,14 @@ export class InstitutionBiographyWorkflowRunner implements InstitutionBiographyW
       // ── Evidence ──
       checkAbort();
       const evidenceEventSink = new MemoryToolEventSink();
+      const evidencePersistent = this.deps.toolEventSinkFactory
+        ? this.deps.toolEventSinkFactory({ packetId: packet.packetId, role: "EVIDENCE" })
+        : undefined;
       const evidence = await stages.runEvidence({
         packetId: packet.packetId,
         store,
         eventSink: evidenceEventSink,
+        ...(evidencePersistent ? { persistentEventSink: evidencePersistent } : {}),
         frozenInput: { leadership, selectedOfficials },
         sink: this.persistence.createEvidenceSink({
           packetId: packet.packetId,

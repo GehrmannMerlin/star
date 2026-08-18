@@ -253,4 +253,36 @@ describe("InvestigatorAgentRunner", () => {
     const result = await runner.run({ packetId: "missing-packet" });
     expect(result.status).toBe("PACKET_NOT_FOUND");
   });
+
+  it("STEP 19.3：persistentEventSink 与 gate 内存 sink 组合不破坏提交", async () => {
+    const { store, packetId } = freshStore();
+    const sink = new InMemoryInvestigationSubmissionSink();
+    const eventSink = new MemoryToolEventSink();
+    const persistent = new MemoryToolEventSink();
+    const runner = new InvestigatorAgentRunner({
+      skillRuntime: stubSkillRuntime,
+      packetStore: store,
+      modelPolicy: new ModelPolicy(() => ({ provider: "deepseek", model: "deepseek-v4-pro" })),
+      modelResolver: await PiModelResolver.create(),
+      sink,
+      validator: stubValidator,
+      eventSink,
+      persistentEventSink: persistent,
+      createSession: async () => ({
+        session: fakeSession(async () => {
+          eventSink.successes.push(successEvent("fetch_page"));
+          eventSink.successes.push(successEvent("inspect_page"));
+          await sink.submit(VALID_SUBMISSION);
+        }) as never,
+        extensionsResult: {} as never,
+      }),
+    });
+    const result = await runner.run({ packetId });
+    expect(result.status).toBe("COMPLETED");
+    if (result.status !== "COMPLETED") return;
+    expect(result.packet.state).toBe("EVIDENCE_PENDING");
+    // 内存 gate sink 仍收到工具事件（persistent 组合不破坏 gate / observation）。
+    expect(eventSink.successes.some((e) => e.toolName === "fetch_page")).toBe(true);
+    expect(result.observationGate.passed).toBe(true);
+  });
 });

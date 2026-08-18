@@ -49,7 +49,7 @@ export function App({ deps }: { deps: AppDeps }): React.ReactElement {
           <div className="brand-lockup">
             <span className="app-mark" aria-hidden="true" />
             <span className="brand">政务简历采集</span>
-            <span className="runtime-status">本机运行</span>
+            <span className="runtime-status">在线服务</span>
           </div>
           <nav className="app-nav" aria-label="主要导航">
             <button
@@ -158,8 +158,17 @@ function WorkspaceView({ api }: { api: ApiClient }): React.ReactElement {
     const es = api.openEvents(task.id);
 
     const onState = (event: Event): void => {
-      const e = JSON.parse((event as MessageEvent).data) as { status: string; statusZh: string };
-      setTask((prev) => (prev ? { ...prev, status: e.status as TaskRunSummary["status"], statusZh: e.statusZh } : prev));
+      const e = JSON.parse((event as MessageEvent).data) as { status: string; statusZh: string; stage?: string };
+      setTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: e.status as TaskRunSummary["status"],
+              statusZh: e.statusZh,
+              ...(e.stage ? { stage: e.stage as TaskRunSummary["stage"] } : {}),
+            }
+          : prev,
+      );
     };
     const onProgress = (event: Event): void => {
       const e = JSON.parse((event as MessageEvent).data) as { processedInstitutions: number; totalInstitutions: number };
@@ -193,14 +202,35 @@ function WorkspaceView({ api }: { api: ApiClient }): React.ReactElement {
     };
   }, [task?.id, api]);
 
+  // STEP 19.3：轻量 snapshot polling 兜底（约 4s；仅 active 任务）。
+  // 只解决 SSE 丢失 / 浏览器休眠 / Nginx 短断 / 极快 terminal 等一致性问题，不替代 SSE。
+  // Terminal 后 effect 依赖 task.status 变化自动停止。
+  useEffect(() => {
+    if (!task || isTerminalStatus(task.status)) return;
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const detail = await api.getTask(task.id);
+          setTask(detail.task);
+        } catch {
+          // polling 失败静默（SSE 仍可更新；不打断用户操作）。
+        }
+      })();
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [task?.id, task?.status, api]);
+
   const handleSubmit = async (values: TaskFormValues): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
       const req = buildCreateRequest(values);
       const resp = await api.createTask(req);
-      setTask(resp.task);
       writeActiveTaskId(resp.task.id);
+      // STEP 19.3：POST 后立即 GET snapshot（Task Snapshot 是页面状态 SSoT；
+      // 任务可能在 SSE 建立前已完成，快照保证快速终态不丢）。
+      const detail = await api.getTask(resp.task.id);
+      setTask(detail.task);
       const rows = await api.getResults(resp.task.id);
       setResults(rows);
     } catch (e) {
@@ -331,10 +361,9 @@ function buildCreateRequest(values: TaskFormValues): CreateTaskRequest {
       mode: "FULL_INSTITUTION",
       regionCode: target.code,
       regionName: target.name,
-      regionCodes: [target.code],
-      // Legacy backend compatibility only.
-      // The frontend task level is now derived from the selected target region.
-      // Remove when the Agent workflow backend contract replaces expandLevel.
+      // STEP 19.3：单选行政区树语义 = 任务行政区（省=省级、省+市=地市级、省+市+区县=区县级）。
+      // 不再传 regionCodes —— 传单个 regionCodes 会在后端被 expandRegions 展开成
+      // 省+所有市+所有区县的多行 scope，从而误走 legacy multi-region 业务主流程。
       expandLevel: "COUNTY",
     };
   }

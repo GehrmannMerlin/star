@@ -6,6 +6,7 @@ import { MIGRATION_004_AGENT_PERSISTENCE } from "./migration-004-agent-persisten
 import { MIGRATION_005_RECOVERY_REREVIEW_PERSISTENCE } from "./migration-005-recovery-rereview-persistence.js";
 import { MIGRATION_006_WORK_PACKET_PERSISTENCE } from "./migration-006-work-packet-persistence.js";
 import { MIGRATION_007_TASK_RUNTIME_RESULT } from "./migration-007-task-runtime-result.js";
+import { MIGRATION_008_TASK_AGENT_PROGRESS } from "./migration-008-task-agent-progress.js";
 
 /** 按文件顺序组织的迁移。 */
 export interface MigrationEntry {
@@ -29,6 +30,10 @@ export const MIGRATIONS: MigrationEntry[] = [
   {
     name: MIGRATION_007_TASK_RUNTIME_RESULT.name,
     migration: MIGRATION_007_TASK_RUNTIME_RESULT.migration,
+  },
+  {
+    name: MIGRATION_008_TASK_AGENT_PROGRESS.name,
+    migration: MIGRATION_008_TASK_AGENT_PROGRESS.migration,
   },
 ];
 

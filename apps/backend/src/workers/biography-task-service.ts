@@ -15,6 +15,7 @@ import {
   createPostgresEvidenceSink,
   createPostgresRecoverySubmissionSink,
   createPostgresReviewDecisionSink,
+  createPostgresToolEventJournal,
   createRehydrationReaders,
   buildRegionBiographyBatchResult,
   InventoryAgentRunner,
@@ -250,7 +251,9 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
     emit: (e: SseEvent) => void,
     signal: AbortSignal | undefined,
   ): Promise<void> {
-    emit({ type: "task.state_changed", taskRunId: task.id, status: "PREPARING", statusZh: "正在准备", seq: 1 });
+    // STEP 19.3：Agent 阶段投影（业务边界更新；SSE 实时 + task_run.agent_stage 持久化）。
+    emit({ type: "task.state_changed", taskRunId: task.id, status: "PREPARING", statusZh: "正在准备", stage: "PREPARING", seq: 1 });
+    await this.repos.taskRun.setAgentProgress(task.id, { stage: "PREPARING" }).catch(() => undefined);
 
     const scopes = await this.repos.targetScope.listByTask(task.id);
     const scope = scopes[0];
@@ -266,20 +269,54 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
       if (!snapshot) throw new Error(`任务无指定机构: ${task.id}`);
       frozen = buildTargetedFrozenInventory(snapshot, scope.region_level);
     } else if (task.mode === "FULL_INSTITUTION") {
-      const inventoryResult = await this.inventoryRunner.run({ regionCode, mode: "FULL" });
-      if (signal?.aborted) return; // 取消：不推进后续编排（终态已持久化）。
-      if (inventoryResult.status !== "COMPLETED") {
-        const reason = inventoryFailureReason(inventoryResult);
+      // STEP 19.3：机构发现阶段（FULL 专属）。
+      emit({ type: "task.state_changed", taskRunId: task.id, status: "PREPARING", statusZh: "正在发现机构", stage: "INVENTORY_DISCOVERY", seq: 2 });
+      await this.repos.taskRun.setAgentProgress(task.id, { stage: "INVENTORY_DISCOVERY" }).catch(() => undefined);
+      // STEP 19.3：多行政区 scope 合并为单一 Frozen Inventory（按机构去重），
+      // 避免 FULL 任务被 expandRegions 展开后误走 legacy multi-region 业务主流程。
+      const includedScopes = scopes.filter((s) => s.included);
+      const inventory: InventorySubmissionPayload["inventory"] = [];
+      const seen = new Set<string>();
+      for (const s of includedScopes) {
+        const inventoryResult = await this.inventoryRunner.run({ regionCode: s.region_code, mode: "FULL" });
+        if (signal?.aborted) return; // 取消：不推进后续编排（终态已持久化）。
+        if (inventoryResult.status !== "COMPLETED") {
+          const reason = inventoryFailureReason(inventoryResult);
+          await this.repos.taskRun.setAgentProgress(task.id, { stage: "FAILED" }).catch(() => undefined);
+          await this.repos.taskRun.complete(task.id, "FAILED", reason);
+          emit({ type: "task.failed", taskRunId: task.id, errorMessageZh: reason, seq: 2 });
+          return; // 结构化失败（业务失败语义，非系统异常 → 不重抛）。
+        }
+        for (const record of inventoryResult.inventory) {
+          if (seen.has(record.standard_name)) continue; // 跨 scope 机构去重。
+          seen.add(record.standard_name);
+          inventory.push(record);
+        }
+      }
+      frozen = { inventory };
+      // STEP 19.3：Empty Inventory 不得静默 COMPLETED（规格 §97）。
+      if (inventory.length === 0) {
+        const reason = "未发现可采集机构（EMPTY_INVENTORY）";
+        await this.repos.taskRun.setAgentProgress(task.id, { stage: "FAILED" }).catch(() => undefined);
         await this.repos.taskRun.complete(task.id, "FAILED", reason);
         emit({ type: "task.failed", taskRunId: task.id, errorMessageZh: reason, seq: 2 });
-        return; // 结构化失败（业务失败语义，非系统异常 → 不重抛）。
+        return;
       }
-      frozen = { inventory: inventoryResult.inventory };
     } else {
       throw new Error(`Biography 运行时暂不支持任务模式: ${task.mode}`);
     }
 
-    emit({ type: "task.state_changed", taskRunId: task.id, status: "CRAWLING", statusZh: "正在抓取", seq: 2 });
+    // STEP 19.3：冻结完成 → 阶段（FULL=INVENTORY_FROZEN；TARGETED 直接 INVESTIGATING）。
+    const postFreezeStage = task.mode === "FULL_INSTITUTION" ? "INVENTORY_FROZEN" : "INVESTIGATING";
+    emit({
+      type: "task.state_changed",
+      taskRunId: task.id,
+      status: "CRAWLING",
+      statusZh: task.mode === "FULL_INSTITUTION" ? "正在抓取" : "正在调查",
+      stage: postFreezeStage,
+      seq: 3,
+    });
+    await this.repos.taskRun.setAgentProgress(task.id, { stage: postFreezeStage }).catch(() => undefined);
     // 持久化运行态（Claim 后立即推进）：重复投递在 CRAWLING 时 claimTask 返回 undefined。
     await this.repos.taskRun.setStatus(task.id, "CRAWLING");
     // 进度总目标：Inventory INCLUDE 记录数（Packet 机械一一对应）。
@@ -290,29 +327,44 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
     const workflow = this.workflow ?? (await this.buildRealWorkflow(signal));
     const packetStore = new PostgresInstitutionWorkPacketStore(this.repos.institutionWorkPacket);
     const collected = new Map<string, InstitutionBiographyWorkflowResult>();
+    const innerRunPacket = createBiographyPacketWorkflowRunner(
+      workflow,
+      (result) => {
+        collected.set(result.packetId, result);
+        // 逐 Packet 完成：原子自增 + SSE 进度（不记录每次 search/fetch/inspect —— 那些已有 ToolEvent）。
+        void this.repos.taskRun
+          .incrementProcessed(task.id)
+          .then((row) =>
+            emit({
+              type: "task.progress_changed",
+              taskRunId: task.id,
+              processedInstitutions: row?.processed_institutions ?? 0,
+              totalInstitutions: row?.total_institutions ?? 0,
+              seq: 10,
+            }),
+          )
+          .catch(() => undefined);
+      },
+      signal,
+    );
     const coordinator = new MultiInstitutionBiographyCoordinator({
       packetStore,
       concurrency: this.concurrency,
-      runPacket: createBiographyPacketWorkflowRunner(
-        workflow,
-        (result) => {
-          collected.set(result.packetId, result);
-          // 逐 Packet 完成：原子自增 + SSE 进度（不记录每次 search/fetch/inspect —— 那些已有 ToolEvent）。
-          void this.repos.taskRun
-            .incrementProcessed(task.id)
-            .then((row) =>
-              emit({
-                type: "task.progress_changed",
-                taskRunId: task.id,
-                processedInstitutions: row?.processed_institutions ?? 0,
-                totalInstitutions: row?.total_institutions ?? 0,
-                seq: 10,
-              }),
-            )
-            .catch(() => undefined);
-        },
-        signal,
-      ),
+      // STEP 19.3：Coordinator 开始 Institution Packet → 更新当前机构 + 阶段。
+      runPacket: async (packet) => {
+        await this.repos.taskRun
+          .setAgentProgress(task.id, { currentInstitution: packet.institutionName })
+          .catch(() => undefined);
+        emit({
+          type: "task.state_changed",
+          taskRunId: task.id,
+          status: "CRAWLING",
+          statusZh: "正在调查",
+          stage: "INVESTIGATING",
+          seq: 4,
+        });
+        return innerRunPacket(packet);
+      },
     });
 
     const { packets } = await coordinator.run(frozen, { regionCode, ...(signal ? { signal } : {}) });
@@ -321,6 +373,8 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
     await this.repos.taskRun.setProgress(task.id, { totalInstitutions: packets.length });
 
     // ── 聚合 + 确定性终态投影 + Task Result 投影 ──
+    emit({ type: "task.state_changed", taskRunId: task.id, status: "CRAWLING", statusZh: "正在生成结果", stage: "FINALIZING", seq: 5 });
+    await this.repos.taskRun.setAgentProgress(task.id, { stage: "FINALIZING" }).catch(() => undefined);
     const workflowResults = packets
       .map((packet) => collected.get(packet.packetId))
       .filter((result): result is InstitutionBiographyWorkflowResult => result !== undefined);
@@ -331,6 +385,11 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
 
     await this.repos.taskRun.setResultSummary(task.id, summary);
     await this.repos.taskRun.setProgress(task.id, { reviewedSlots });
+    // STEP 19.3：终态 stage 投影（在 complete 前写，避免 terminal 状态守卫拦截；清除当前机构）。
+    const terminalStage = terminal === "FAILED" ? "FAILED" : terminal === "COMPLETED" ? "COMPLETED" : "PARTIAL_COMPLETED";
+    await this.repos.taskRun
+      .setAgentProgress(task.id, { stage: terminalStage, currentInstitution: null })
+      .catch(() => undefined);
     await this.repos.taskRun.complete(
       task.id,
       terminal,
@@ -340,7 +399,7 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
     );
 
     if (terminal === "FAILED") {
-      emit({ type: "task.failed", taskRunId: task.id, errorMessageZh: "全部机构采集失败", seq: 3 });
+      emit({ type: "task.failed", taskRunId: task.id, errorMessageZh: "全部机构采集失败", seq: 6 });
     } else {
       emit({
         type: "task.completed",
@@ -362,6 +421,9 @@ export class BiographyTaskExecutionService implements BiographyTaskExecutor {
       modelResolver,
       skill: { name: identity.name, version: identity.version },
       persistence: this.buildPersistence(),
+      // STEP 19.3：Investigator/Evidence 阶段 ToolEvent 作为 Agent provenance 持久化到
+      // tool_event 表（gate/总结仍走内存 sink）。不记录凭据/完整网页正文/模型推理。
+      toolEventSinkFactory: () => createPostgresToolEventJournal(this.db),
       ...(signal ? { abortSignal: signal } : {}),
     });
   }

@@ -162,6 +162,29 @@ export class TaskRunRepository {
   }
 
   /**
+   * 更新 Agent 运行进度投影（STEP 19.3：业务边界 stage + 当前机构）。
+   * stage 只在业务边界更新（Inventory Start/Frozen、Investigator Start、Evidence Start、
+   * Review Start、Recovery Start、Finalizing），不随每个 HTTP fetch 变化；
+   * current_institution 在 Coordinator 开始 Institution Packet 时更新。
+   * 终态任务（如已取消）不再覆盖。
+   */
+  async setAgentProgress(
+    taskRunId: string,
+    patch: { stage?: string; currentInstitution?: string | null },
+  ): Promise<TaskRunRow | undefined> {
+    const set: Record<string, string | null> = {};
+    if (patch.stage !== undefined) set.agent_stage = patch.stage;
+    if (patch.currentInstitution !== undefined) set.current_institution = patch.currentInstitution;
+    return this.db
+      .updateTable("task_run")
+      .set(set)
+      .where("id", "=", taskRunId)
+      .where("status", "not in", TERMINAL_STATUSES)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
    * 保存 Task Result 投影（STEP 17：Biography Task 的批量结果摘要）。
    * result_summary 只是 aggregation/projection（RegionBiographyBatchResult + taskId/regionName）；
    * PRIMARY Biography URL 最终事实仍是 latest frozen APPROVED review，不在此重复 Artifact。

@@ -365,6 +365,32 @@ describe("BiographyTaskExecutionService — 进度投影", () => {
     expect(seenProcessed).toEqual([1, 2]);
     for (const e of progressEvents) expect(e.totalInstitutions).toBe(2);
   });
+
+  it("STEP 19.3：业务边界 stage 投影（SSE 事件序列 + task_run.agent_stage 持久化）", async () => {
+    const task = await createTask("FULL_INSTITUTION");
+    const events: SseEvent[] = [];
+    const workflow = fakeWorkflow(() => ({ status: "RESOLVED", urls: ["https://x.gov.cn/a", "https://x.gov.cn/b"] }));
+    const executor = makeExecutor({
+      workflow,
+      inventoryRunner: fakeInventoryRunner([
+        { institution_id: "i1", standard_name: "机构一", administrative_level: "COUNTY", decision: "INCLUDE" },
+      ]),
+      events,
+    });
+    await executor.run(task.id);
+
+    // agent_stage 持久化为终态 stage。
+    const row = (await repos.taskRun.findById(task.id))!;
+    expect(row.agent_stage).toBe("COMPLETED");
+
+    // SSE task.state_changed 按业务边界携带稳定 stage（PREPARING → INVENTORY_DISCOVERY →
+    // INVENTORY_FROZEN → INVESTIGATING → FINALIZING）。
+    const stageEvents = events.filter(
+      (e): e is SseEvent & { stage?: string } => e.type === "task.state_changed" && "stage" in e,
+    );
+    const stages = stageEvents.map((e) => e.stage);
+    expect(stages).toEqual(["PREPARING", "INVENTORY_DISCOVERY", "INVENTORY_FROZEN", "INVESTIGATING", "FINALIZING"]);
+  });
 });
 
 describe("BiographyTaskExecutionService — 重复执行保护（Claim Gate）", () => {

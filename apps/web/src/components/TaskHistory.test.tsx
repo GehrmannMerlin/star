@@ -18,6 +18,7 @@ const taskSummary: TaskRunSummary = {
   recoveryCount: 0,
   blockedCount: 0,
   requestedAt: new Date(0).toISOString(),
+  stage: "COMPLETED",
   controlable: false,
 };
 

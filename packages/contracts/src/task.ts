@@ -33,6 +33,28 @@ export const CreateTaskRequest = Type.Object({
 });
 export type CreateTaskRequest = Static<typeof CreateTaskRequest>;
 
+/**
+ * Agent 运行阶段（STEP 19.3：任务状态卡展示）。
+ * 由后端从运行态投影（agent_stage / status / progress），非 DB enum；
+ * 不与 TaskRunStatus 重复——Status 是终态/控制语义，Stage 是 Agent 工作流进度。
+ */
+export const TaskStage = Type.Union([
+  Type.Literal("QUEUED"),
+  Type.Literal("PREPARING"),
+  Type.Literal("INVENTORY_DISCOVERY"),
+  Type.Literal("INVENTORY_FROZEN"),
+  Type.Literal("INVESTIGATING"),
+  Type.Literal("EVIDENCE_GATHERING"),
+  Type.Literal("REVIEWING"),
+  Type.Literal("RECOVERING"),
+  Type.Literal("FINALIZING"),
+  Type.Literal("COMPLETED"),
+  Type.Literal("PARTIAL_COMPLETED"),
+  Type.Literal("FAILED"),
+  Type.Literal("CANCELLED"),
+]);
+export type TaskStage = Static<typeof TaskStage>;
+
 /** 任务摘要（用户可见中文状态 + 真实计数）。 */
 export const TaskRunSummary = Type.Object({
   id: Type.String(),
@@ -50,6 +72,10 @@ export const TaskRunSummary = Type.Object({
   startedAt: Type.Optional(Type.String()),
   finishedAt: Type.Optional(Type.String()),
   errorMessage: Type.Optional(Type.String()),
+  /** STEP 19.3：Agent 运行阶段（由后端投影；legacy 任务从 status/progress 推导）。 */
+  stage: TaskStage,
+  /** STEP 19.3：当前正在处理的机构名（Agent 进度；可能暂无）。 */
+  currentInstitution: Type.Optional(Type.String()),
   /** 是否可执行暂停/取消等控制操作（非终态，规格 §19.1）。 */
   controlable: Type.Boolean(),
 });

@@ -24,6 +24,8 @@ function makeTask(overrides: Partial<TaskRunRow> = {}): TaskRunRow {
     recovery_count: 0,
     blocked_count: 0,
     result_summary: null,
+    agent_stage: null,
+    current_institution: null,
     ...overrides,
   };
 }
@@ -120,7 +122,7 @@ describe("P5-T2 STEP 17 — Biography Task Runtime 路由（biographyExecutor �
     findById.mockResolvedValue(makeTask({ mode: "TARGETED" }));
     await runTaskJob(deps, "task-1");
     expect(biographyExecutor.run).toHaveBeenCalledOnce();
-    expect(biographyExecutor.run).toHaveBeenCalledWith("task-1");
+    expect(biographyExecutor.run).toHaveBeenCalledWith("task-1", expect.objectContaining({ signal: expect.anything() }));
     expect(deps.runTaskPipeline).not.toHaveBeenCalled();
   });
 
@@ -137,7 +139,7 @@ describe("P5-T2 STEP 17 — Biography Task Runtime 路由（biographyExecutor �
     expect(deps.runMultiInstitutionPipeline).not.toHaveBeenCalled();
   });
 
-  it("FULL_INSTITUTION 多行政区（regionCodes）仍路由到 runMultiRegionPipeline", async () => {
+  it("STEP 19.3：FULL_INSTITUTION 多行政区（regionCodes）统一路由到 biographyExecutor（不再走 legacy）", async () => {
     const biographyExecutor = { run: vi.fn(async () => {}) };
     const deps = makeDeps({ biographyExecutor });
     const findById = deps.repos.taskRun.findById as ReturnType<typeof vi.fn>;
@@ -147,8 +149,9 @@ describe("P5-T2 STEP 17 — Biography Task Runtime 路由（biographyExecutor �
       { region_code: "340100" },
     ]);
     await runTaskJob(deps, "task-1");
-    expect(deps.runMultiRegionPipeline).toHaveBeenCalledOnce();
-    expect(biographyExecutor.run).not.toHaveBeenCalled();
+    expect(biographyExecutor.run).toHaveBeenCalledOnce();
+    expect(deps.runMultiRegionPipeline).not.toHaveBeenCalled();
+    expect(deps.runMultiInstitutionPipeline).not.toHaveBeenCalled();
   });
 
   it("无 biographyExecutor（legacy 配置）保持既有路由", async () => {
