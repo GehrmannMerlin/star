@@ -45,6 +45,7 @@ const taskSummary = {
   recoveryCount: 0,
   blockedCount: 0,
   requestedAt: new Date().toISOString(),
+  stage: "COMPLETED" as const,
   controlable: false,
 };
 
@@ -124,6 +125,7 @@ const runningTask: TaskRunSummary = {
   statusZh: "正在抓取",
   processedInstitutions: 0,
   totalInstitutions: 3,
+  stage: "INVESTIGATING",
   controlable: true,
 };
 
@@ -202,7 +204,7 @@ describe("网页工作台", () => {
     expect(await screen.findByText("张三 区长")).toBeInTheDocument();
   });
 
-  it("默认完整机构模式：选择行政区后 createTask 传 regionCodes + FULL_INSTITUTION", async () => {
+  it("STEP 19.3：默认完整机构模式：选择行政区后 createTask 传 regionCode（不再传 regionCodes）", async () => {
     render(<App deps={deps} />);
     // 默认 FULL_INSTITUTION 模式，RegionPicker 已渲染。
     expect(screen.getByText("采集范围")).toBeInTheDocument();
@@ -216,10 +218,11 @@ describe("网页工作台", () => {
     const req = (mockApi.createTask as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
       mode: string;
       regionCode: string;
-      regionCodes: string[];
+      regionCodes?: string[];
     };
     expect(req.mode).toBe("FULL_INSTITUTION");
-    expect(req.regionCodes).toEqual(["340100"]);
+    // STEP 19.3：单选行政区树不再编码成 regionCodes（避免后端 expandRegions 误走 legacy multi-region）。
+    expect(req.regionCodes).toBeUndefined();
     expect(req.regionCode).toBe("340100");
   });
 
@@ -285,16 +288,55 @@ describe("任务进度 SSE 绑定", () => {
     await waitFor(() => expect(api.openEvents).toHaveBeenCalledTimes(1));
     expect(lastEvents).not.toBeNull();
     lastEvents!.emit("task.progress_changed", { processedInstitutions: 2, totalInstitutions: 3 });
-    await waitFor(() => expect(screen.getByText("已处理机构：2/3")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("机构进度：2/3")).toBeInTheDocument());
   });
 
-  it("终态 SSE 事件后对齐快照并关闭 SSE", async () => {
-    const completed: TaskRunSummary = { ...runningTask, status: "COMPLETED", statusZh: "已完成", controlable: false };
+  it("STEP 19.3：POST 后任务极快 COMPLETED（SSE 前 terminal）→ 直接显示已完成且不订阅 SSE", async () => {
+    const completed: TaskRunSummary = { ...runningTask, status: "COMPLETED", statusZh: "已完成", stage: "COMPLETED", controlable: false };
     const api = makeApi({
       getTask: vi.fn(async () => ({
         task: completed,
         scopes: [],
-        institution: { id: "i1", taskRunId: "t2", regionCode: "340000", officialName: "某某区人民政府", institutionType: "government" as const, discoverySource: "user_specified", selectTwoPrimary: true, frozenAt: new Date().toISOString(), status: "ACTIVE" },
+        institution: {
+          id: "i1",
+          taskRunId: "t2",
+          regionCode: "340000",
+          officialName: "某某区人民政府",
+          institutionType: "government" as const,
+          discoverySource: "user_specified",
+          selectTwoPrimary: true,
+          frozenAt: new Date().toISOString(),
+          status: "ACTIVE",
+        },
+      })),
+    });
+    render(<App deps={{ api }} />);
+    await switchToTargeted();
+    await user.click(screen.getByRole("button", { name: "开始采集" }));
+
+    // 快照是 SSoT：任务已完成则直接恢复终态，SSE 未建立也不丢。
+    await waitFor(() => expect(screen.getByText(/已完成/)).toBeInTheDocument());
+    expect(api.openEvents).not.toHaveBeenCalled();
+  });
+
+  it("STEP 19.3：SSE 终态事件 → snapshot reconciliation → 关闭 SSE 并停止 polling", async () => {
+    const completed: TaskRunSummary = { ...runningTask, status: "COMPLETED", statusZh: "已完成", stage: "COMPLETED", controlable: false };
+    let getTaskCalls = 0;
+    const api = makeApi({
+      getTask: vi.fn(async () => ({
+        task: getTaskCalls++ === 0 ? runningTask : completed,
+        scopes: [],
+        institution: {
+          id: "i1",
+          taskRunId: "t2",
+          regionCode: "340000",
+          officialName: "某某区人民政府",
+          institutionType: "government" as const,
+          discoverySource: "user_specified",
+          selectTwoPrimary: true,
+          frozenAt: new Date().toISOString(),
+          status: "ACTIVE",
+        },
       })),
     });
     render(<App deps={{ api }} />);
@@ -361,8 +403,11 @@ describe("导出按钮 gating", () => {
   });
 
   it("PARTIAL_COMPLETED 任务导出按钮可用且不当失败展示", async () => {
-    const partial: TaskRunSummary = { ...taskSummary, status: "PARTIAL_COMPLETED", statusZh: "部分完成", controlable: false };
-    const api = makeApi({ createTask: vi.fn(async () => ({ task: partial, idempotencyResult: "created" as const })) });
+    const partial: TaskRunSummary = { ...taskSummary, status: "PARTIAL_COMPLETED", statusZh: "部分完成", stage: "PARTIAL_COMPLETED", controlable: false };
+    const api = makeApi({
+      createTask: vi.fn(async () => ({ task: partial, idempotencyResult: "created" as const })),
+      getTask: vi.fn(async () => ({ task: partial, scopes: [], institution: { id: "i1", taskRunId: "t1", regionCode: "340000", officialName: "某某区人民政府", institutionType: "government" as const, discoverySource: "user_specified", selectTwoPrimary: true, frozenAt: new Date().toISOString(), status: "ACTIVE" } })),
+    });
     render(<App deps={{ api }} />);
     await switchToTargeted();
     await user.click(screen.getByRole("button", { name: "开始采集" }));

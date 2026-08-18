@@ -13,6 +13,8 @@ const TaskStateChanged = Type.Object({
   taskRunId: Type.String(),
   status: Type.Enum(TaskRunStatus),
   statusZh: Type.String(),
+  /** STEP 19.3：Agent 运行阶段（业务边界更新；可选）。 */
+  stage: Type.Optional(Type.String()),
   seq: Type.Number(),
 });
 const TaskProgressChanged = Type.Object({

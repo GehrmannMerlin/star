@@ -68,6 +68,7 @@ describe("contracts 边界合同", () => {
       recoveryCount: 0,
       blockedCount: 0,
       requestedAt: new Date().toISOString(),
+      stage: "QUEUED",
       controlable: true,
     };
     expect(Value.Check(CreateTaskResponse, { task, idempotencyResult: "created" })).toBe(true);

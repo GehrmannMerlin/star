@@ -57,6 +57,12 @@ export interface TaskRunTable extends BaseTable {
    * PRIMARY Biography URL 最终事实仍是 latest frozen APPROVED review，不复制 Artifact。
    */
   result_summary: unknown | null;
+  /**
+   * Agent 运行阶段（STEP 19.3：业务边界投影；非 DB enum，legacy 为 null 时由读取侧推导）。
+   */
+  agent_stage: string | null;
+  /** 当前正在处理的机构名（STEP 19.3：Agent 进度展示；可能暂无）。 */
+  current_institution: string | null;
 }
 
 export interface TargetScopeTable extends BaseTable {
