@@ -66,3 +66,24 @@ export class MemoryToolEventSink implements ToolEventSink, ToolEventReader {
     return this.successes;
   }
 }
+
+/**
+ * 组合多个 sink：同一 ToolEvent 按序派发给每个 sink（STEP 19.3）。
+ *
+ * 真实 workflow 需要同时写入两类 sink：
+ * - MemoryToolEventSink：阶段 gate / 总结（starts/successes 数组）；
+ * - PostgresToolEventJournal：Agent provenance 持久化（tool_event 表）。
+ */
+export function composeToolEventSinks(...sinks: ToolEventSink[]): ToolEventSink {
+  const forward = async <E>(emit: (sink: ToolEventSink, e: E) => void | Promise<void>, event: E): Promise<void> => {
+    for (const sink of sinks) {
+      await emit(sink, event);
+    }
+  };
+  return {
+    onStart: (e) => forward((s, ev) => s.onStart(ev), e),
+    onSuccess: (e) => forward((s, ev) => s.onSuccess(ev), e),
+    onFailure: (e) => forward((s, ev) => s.onFailure(ev), e),
+    onCancelled: (e) => forward((s, ev) => s.onCancelled(ev), e),
+  };
+}
