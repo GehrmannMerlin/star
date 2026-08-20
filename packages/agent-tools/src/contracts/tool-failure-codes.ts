@@ -36,6 +36,14 @@ export const ToolFailureCode = {
   RECOVERY_ALREADY_SUBMITTED: "RECOVERY_ALREADY_SUBMITTED",
   RECOVERY_CANDIDATE_DUPLICATE: "RECOVERY_CANDIDATE_DUPLICATE",
   RECOVERY_OBSERVATION_REQUIRED: "RECOVERY_OBSERVATION_REQUIRED",
+  /** STEP 19.4：submit_investigation 契约修复链专用错误码。 */
+  INVESTIGATION_SCHEMA_VALIDATION_FAILED: "INVESTIGATION_SCHEMA_VALIDATION_FAILED",
+  INVESTIGATION_SCHEMA_REPAIR_EXHAUSTED: "INVESTIGATION_SCHEMA_REPAIR_EXHAUSTED",
+  INVESTIGATION_REPEATED_SCHEMA_ERROR: "INVESTIGATION_REPEATED_SCHEMA_ERROR",
+  INVESTIGATION_TOOL_NOT_CALLED: "INVESTIGATION_TOOL_NOT_CALLED",
+  INVESTIGATION_PROVIDER_TOOL_CALL_INVALID: "INVESTIGATION_PROVIDER_TOOL_CALL_INVALID",
+  RESEARCH_TOOL_NOT_ALLOWED_DURING_SUBMISSION_REPAIR:
+    "RESEARCH_TOOL_NOT_ALLOWED_DURING_SUBMISSION_REPAIR",
 } as const;
 
 export type ToolFailureCode = (typeof ToolFailureCode)[keyof typeof ToolFailureCode];
@@ -44,17 +52,22 @@ export type ToolFailure = {
   code: ToolFailureCode;
   message: string;
   retryable: boolean;
+  /** STEP 19.4：结构化修复详情（ValidationIssue[]），供 Runner 生成精确 repair
+   *  反馈。不含完整 payload / secrets / reasoning。 */
+  details?: unknown;
 };
 
 export class ToolFailureError extends Error {
   readonly code: ToolFailureCode;
   readonly retryable: boolean;
+  readonly details?: unknown;
 
   constructor(failure: ToolFailure) {
     super(failure.message);
     this.name = "ToolFailureError";
     this.code = failure.code;
     this.retryable = failure.retryable;
+    this.details = failure.details;
   }
 
   toFailure(): ToolFailure {
@@ -62,6 +75,7 @@ export class ToolFailureError extends Error {
       code: this.code,
       message: this.message,
       retryable: this.retryable,
+      ...(this.details !== undefined ? { details: this.details } : {}),
     };
   }
 }

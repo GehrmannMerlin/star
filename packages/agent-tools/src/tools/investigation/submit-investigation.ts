@@ -7,8 +7,10 @@ import type {
   InvestigationSubmissionValidator,
   LeadershipStructureArtifact,
   PersonDecisionArtifact,
+  StructuredSubmissionValidation,
   SubmitInvestigationSuccess,
 } from "./investigation-submission.js";
+import { formatValidationRepairMessage } from "./investigation-submission.js";
 
 /** Opaque canonical artifacts; the full shape is enforced by the Skill schemas. */
 const leadershipArtifact = Type.Object({}, { additionalProperties: true });
@@ -39,6 +41,10 @@ export type SubmitInvestigationToolDeps = {
  * The tool validates both canonical artifacts, enforces the mechanical
  * distinct-person gate (PRIMARY_1 != PRIMARY_2), accepts exactly one
  * submission per packet, and rejects any later override.
+ *
+ * STEP 19.4：schema 失败时，若 validator 返回结构化 details（含 fieldPath /
+ * receivedValue / allowedValues / repairInstruction），错误消息使用精确
+ * repair 反馈，而不是只有泛化的 allowed-values 提示。
  */
 export function createSubmitInvestigationTool(
   deps: SubmitInvestigationToolDeps,
@@ -52,12 +58,19 @@ export function createSubmitInvestigationTool(
       const leadership = input.leadership as LeadershipStructureArtifact;
       const selectedOfficials = input.selectedOfficials as PersonDecisionArtifact[];
       const payload: InvestigationSubmissionPayload = { leadership, selectedOfficials };
-      const validation = deps.validator.validate(payload);
+      const validation = deps.validator.validate(payload) as StructuredSubmissionValidation;
       if (!validation.valid) {
+        const issues = validation.details ?? [];
+        const message = issues.length > 0
+          ? formatValidationRepairMessage(issues)
+          : `submit_investigation failed Skill schema validation: ${validation.errors.join("; ")}`;
         throw new ToolFailureError({
+          // 兼容既有 ToolFailureCode.SCHEMA_VALIDATION_FAILED 契约；具体错误
+          // 类型由 details[].errorCode = SUBMISSION_SCHEMA_VALIDATION_FAILED 区分。
           code: ToolFailureCode.SCHEMA_VALIDATION_FAILED,
-          message: `submit_investigation failed Skill schema validation: ${validation.errors.join("; ")}`,
+          message,
           retryable: false,
+          ...(issues.length > 0 ? { details: issues } : {}),
         });
       }
 
