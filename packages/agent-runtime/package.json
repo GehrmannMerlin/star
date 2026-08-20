@@ -17,6 +17,7 @@
     "smoke:inspect": "tsx src/smoke/inspect-smoke.ts",
     "smoke:inventory": "tsx src/smoke/inventory-smoke.ts",
     "smoke:investigation": "tsx src/smoke/investigation-smoke.ts",
+    "smoke:submission-only": "tsx src/smoke/submission-only-smoke.ts",
     "smoke:evidence": "tsx src/smoke/evidence-smoke.ts",
     "smoke:reviewer": "tsx src/smoke/reviewer-smoke.ts",
     "smoke:recovery": "tsx src/smoke/recovery-smoke.ts",
