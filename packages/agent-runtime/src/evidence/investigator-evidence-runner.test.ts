@@ -305,3 +305,51 @@ describe("InvestigatorEvidenceRunner", () => {
     expect(result.status).toBe("INVALID_REQUEST");
   });
 });
+
+
+describe("buildEvidenceRolePrompt enum projection", () => {
+  it("includes source_domain_class / page_shape_class / candidate_status enums when a contract is supplied", async () => {
+    const pathMod = await import("node:path");
+    const urlMod = await import("node:url");
+    const SKILL_DIR = pathMod.resolve(
+      pathMod.dirname(urlMod.fileURLToPath(import.meta.url)),
+      "../../../../third-party/china-official-url-evidence-suite/skills/official-biography-evidence",
+    );
+    const { SkillSchemaRegistry } = await import("../skill/skill-schema-registry.js");
+    const registry = await SkillSchemaRegistry.load(pathMod.join(SKILL_DIR, "schemas"));
+    const pool = registry
+      .list()
+      .map((n) => registry.get(n))
+      .find((s) => s?.filePath.endsWith("url-candidate-pool.schema.json"));
+    const claim = registry
+      .list()
+      .map((n) => registry.get(n))
+      .find((s) => s?.filePath.endsWith("target-claim.schema.json"));
+    if (!pool || !claim) throw new Error("schemas missing");
+    const { CanonicalEvidenceContract } = await import("./canonical-evidence-contract.js");
+    const { buildEvidenceRolePrompt } = await import("./evidence-role-prompt.js");
+    const contract = new CanonicalEvidenceContract(pool, claim);
+    const text = buildEvidenceRolePrompt(
+      {
+        packetId: "p1",
+        institutionName: "鼓楼区人民政府",
+        regionCode: "320106",
+        institutionId: "glq",
+        administrativeLevel: "COUNTY",
+        institutionType: "government",
+        state: "EVIDENCE_PENDING",
+        attemptNo: 1,
+      } as never,
+      {
+        regionCode: "320106",
+        agentSessionId: "s1",
+        primary1: { targetId: "t1", personId: "p1", personName: "甲", primarySlot: "PRIMARY_1" },
+        primary2: { targetId: "t2", personId: "p2", personName: "乙", primarySlot: "PRIMARY_2" },
+        institutionId: "glq",
+        contract,
+      },
+    );
+    expect(text).toContain("OFFICIAL_GOV_DOMAIN");
+    expect(text).toContain("ACCEPTED_AS_FINAL");
+  });
+});
