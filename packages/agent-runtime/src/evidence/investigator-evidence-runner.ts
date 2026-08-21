@@ -5,7 +5,6 @@ import {
   createAgentToolRegistry,
   createSubmitInvestigatorEvidenceTool,
   MemoryToolEventSink,
-  ToolGateway,
   type EvidencePrimaryDecision,
   type InvestigationSubmissionValidator,
   type InvestigatorEvidenceSubmissionSink,
@@ -22,14 +21,34 @@ import type { InMemoryInstitutionWorkPacketStore } from "../work-packet/institut
 import { createSkillInvestigationValidator } from "../investigation/skill-investigation-validator.js";
 import { InMemoryInvestigatorEvidenceSubmissionSink } from "./investigator-evidence-submission-sink.js";
 import { createSkillEvidenceValidator } from "./skill-evidence-validator.js";
-import { buildEvidenceRolePrompt } from "./evidence-role-prompt.js";
+import { CanonicalEvidenceContract } from "./canonical-evidence-contract.js";
+import {
+  buildEvidenceRolePrompt,
+  buildEvidenceFinalizePrompt,
+  buildEvidenceRepairPrompt,
+} from "./evidence-role-prompt.js";
 import { evaluateEvidenceProvenance } from "./evidence-provenance.js";
+import {
+  EvidenceSubmissionPhaseTracker,
+  SUBMIT_EVIDENCE_MAX_ATTEMPTS,
+  EVIDENCE_SCHEMA_REPAIR_MAX_ATTEMPTS,
+} from "./evidence-submission-phase-tracker.js";
+import { EvidenceRepairGateway } from "./evidence-repair-gateway.js";
 import type {
+  EvidenceRepairReport,
   EvidenceToolCallSummary,
   InvestigatorEvidenceRequest,
   InvestigatorEvidenceResult,
 } from "./evidence-types.js";
 import { InvestigatorEvidenceRuntimeError } from "./evidence-types.js";
+
+type EvidencePromptOptionsBase = {
+  regionCode: string;
+  agentSessionId: string;
+  primary1: EvidencePrimaryDecision;
+  primary2: EvidencePrimaryDecision;
+  institutionId: string;
+};
 
 const EVIDENCE_TOOL_NAMES = [
   "get_region_context",
@@ -78,6 +97,14 @@ type PrimaryDecisionPair = {
  * it checks freeze + the per-candidate provenance gate, then moves the packet
  * EVIDENCE_GATHERING -> READY_FOR_REVIEW. No PRIMARY re-selection, no final URL
  * selection, no ranking, no provider hardcoding here.
+ *
+ * STEP 20.1 闭环：
+ * - 单次完整 evidence prompt（EVIDENCE_GATHERING）
+ * - 若未提交 → 一次短 Finalize steering（FINALIZING）
+ * - 若仍有 Schema 失败 → 至多 2 次 Repair steering（EVIDENCE_SUBMISSION_REPAIR），
+ *   每次携带结构化 allowed_values 反馈；Repair 阶段拒绝研究工具
+ * - Repeated Error Circuit Breaker：连续相同 fingerprint → fail fast
+ * - 总 submit_investigator_evidence attempts <= 3；仍失败 → REPAIR_EXHAUSTED
  */
 export class InvestigatorEvidenceRunner {
   constructor(private readonly deps: InvestigatorEvidenceRunnerDeps) {}
@@ -131,10 +158,19 @@ export class InvestigatorEvidenceRunner {
         primaryDecisions: [primaryDecisions.primary1, primaryDecisions.primary2],
       }),
     });
-    const gateway = new ToolGateway(
-      registry,
-      this.deps.persistentEventSink ? composeToolEventSinks(eventSink, this.deps.persistentEventSink) : eventSink,
-    );
+    const effectiveSink = this.deps.persistentEventSink
+      ? composeToolEventSinks(eventSink, this.deps.persistentEventSink)
+      : eventSink;
+    const gateway = new EvidenceRepairGateway(registry, effectiveSink);
+
+    // STEP 20.1：Canonical Evidence Contract（Prompt 枚举投影的 SSoT）。
+    let contract: CanonicalEvidenceContract | undefined;
+    try {
+      contract = await loadCanonicalEvidenceContract(identity);
+    } catch {
+      // contract 加载失败不阻断运行：validator 仍会兜底拒绝非法枚举，
+      // 只是 Prompt 没有枚举投影（fail-closed 的缺口由 validator 覆盖）。
+    }
 
     const modelPolicy = this.deps.modelPolicy ?? new ModelPolicy();
     const resolved = modelPolicy.resolve("INVESTIGATOR");
@@ -172,38 +208,68 @@ export class InvestigatorEvidenceRunner {
       investigatorSessionId: agentSessionId,
     });
 
-    const promptText = buildEvidenceRolePrompt(packet, {
+    const promptOptions: EvidencePromptOptionsBase = {
       regionCode: packet.regionCode ?? "",
       agentSessionId,
       primary1: primaryDecisions.primary1,
       primary2: primaryDecisions.primary2,
       institutionId: packet.institutionId,
-    });
-    if (this.deps.abortSignal) {
-      const onAbort = () => {
-        void session.abort();
-      };
-      this.deps.abortSignal.addEventListener("abort", onAbort, { once: true });
-      try {
-        await session.prompt(promptText);
-      } catch (error) {
-        if (!this.deps.abortSignal.aborted) throw error;
-      } finally {
-        this.deps.abortSignal.removeEventListener("abort", onAbort);
+    };
+    // exactOptionalPropertyTypes：contract 存在才作为属性传入。
+    if (contract) {
+      (promptOptions as { contract?: CanonicalEvidenceContract }).contract = contract;
+    }
+
+    // ---- STEP 20.1：阶段化提交闭环 ----
+    const phase = new EvidenceSubmissionPhaseTracker(eventSink, identity);
+
+    const promptText = buildEvidenceRolePrompt(packet, promptOptions);
+    await this.prompt(session, promptText);
+
+    if (!(await sink.isFrozen())) {
+      // Finalize steering：一次短提示要求提交。
+      const finalizeText = buildEvidenceFinalizePrompt(packet, promptOptions);
+      await this.prompt(session, finalizeText);
+    }
+
+    // Repair 循环：观测 submit 失败并施加预算 / 熔断。
+    if (!(await sink.isFrozen())) {
+      const outcome = await this.runRepairLoop(session, gateway, phase, agentSessionId);
+      if (outcome !== "FROZEN") {
+        const toolCalls = summarizeEvidenceToolCalls(eventSink, false);
+        const failureCode =
+          outcome === "BREAKER"
+            ? "EVIDENCE_REPEATED_SCHEMA_ERROR"
+            : outcome === "EXHAUSTED"
+              ? "EVIDENCE_SCHEMA_REPAIR_EXHAUSTED"
+              : outcome === "TOOL_NOT_CALLED"
+                ? "EVIDENCE_TOOL_NOT_CALLED"
+                : "EVIDENCE_NOT_SUBMITTED";
+        return this.fail(request.packetId, failureCode, agentSessionId, toolCalls, phase.report());
       }
-    } else {
-      await session.prompt(promptText);
     }
 
     const frozen = await sink.isFrozen();
     const toolCalls = summarizeEvidenceToolCalls(eventSink, frozen);
     if (!frozen) {
-      return this.fail(request.packetId, "EVIDENCE_NOT_SUBMITTED", agentSessionId, toolCalls);
+      return this.fail(
+        request.packetId,
+        "EVIDENCE_NOT_SUBMITTED",
+        agentSessionId,
+        toolCalls,
+        phase.report(),
+      );
     }
 
     const submission = await sink.getSubmission();
     if (!submission) {
-      return this.fail(request.packetId, "EVIDENCE_NOT_SUBMITTED", agentSessionId, toolCalls);
+      return this.fail(
+        request.packetId,
+        "EVIDENCE_NOT_SUBMITTED",
+        agentSessionId,
+        toolCalls,
+        phase.report(),
+      );
     }
 
     // Runtime per-candidate provenance gate: search snippets alone never count.
@@ -216,6 +282,7 @@ export class InvestigatorEvidenceRunner {
         "POSITION_CANDIDATE_OBSERVATION_REQUIRED",
         agentSessionId,
         toolCalls,
+        phase.report(),
       );
     }
 
@@ -239,6 +306,7 @@ export class InvestigatorEvidenceRunner {
       model: { provider: resolved.provider, model: resolved.model },
       toolCalls,
       provenance,
+      repair: phase.report(),
       receipt: {
         frozen: true,
         candidatesValidated: true,
@@ -254,16 +322,100 @@ export class InvestigatorEvidenceRunner {
     };
   }
 
+  private async prompt(
+    session: { prompt: (text: string) => Promise<void> },
+    text: string,
+  ): Promise<void> {
+    if (this.deps.abortSignal) {
+      const onAbort = () => {
+        void (session as { abort?: () => void }).abort?.();
+      };
+      this.deps.abortSignal.addEventListener("abort", onAbort, { once: true });
+      try {
+        await session.prompt(text);
+      } catch (error) {
+        if (!this.deps.abortSignal.aborted) throw error;
+      } finally {
+        this.deps.abortSignal.removeEventListener("abort", onAbort);
+      }
+    } else {
+      await session.prompt(text);
+    }
+  }
+
+  /**
+   * STEP 20.1 — Evidence Repair Loop。
+   *
+   * 观测 submit_investigator_evidence 的 schema 失败；若 Agent 未在单次 prompt
+   * 内自修复，至多进行 EVIDENCE_SCHEMA_REPAIR_MAX_ATTEMPTS 次 Repair steering
+   * （携带结构化 allowed_values）。连续相同 fingerprint → breaker。总 attempts
+   * 超过 SUBMIT_EVIDENCE_MAX_ATTEMPTS → exhausted。
+   */
+  private async runRepairLoop(
+    session: { prompt: (text: string) => Promise<void> },
+    gateway: EvidenceRepairGateway,
+    phase: EvidenceSubmissionPhaseTracker,
+    agentSessionId: string,
+  ): Promise<"FROZEN" | "BREAKER" | "EXHAUSTED" | "TOOL_NOT_CALLED" | "NOT_SUBMITTED"> {
+    const sink = this.deps.sink ?? new InMemoryInvestigatorEvidenceSubmissionSink();
+    let repairCount = 0;
+    let lastFingerprint: string | undefined;
+
+    for (let attempt = 0; attempt < SUBMIT_EVIDENCE_MAX_ATTEMPTS; attempt += 1) {
+      const current = phase.schemaFailures();
+      if (current.length === 0) {
+        // 无 schema 失败但未提交：Agent 从未调用 submit（或已修好但未提交）。
+        return (await sink.isFrozen()) ? "FROZEN" : "NOT_SUBMITTED";
+      }
+
+      // Repeated Error Circuit Breaker：连续相同 fingerprint → STOP。
+      const fingerprint = phase.fingerprint();
+      if (fingerprint !== undefined && fingerprint === lastFingerprint) {
+        phase.markBreakerTriggered();
+        return "BREAKER";
+      }
+      lastFingerprint = fingerprint;
+
+      if (repairCount >= EVIDENCE_SCHEMA_REPAIR_MAX_ATTEMPTS) {
+        return "EXHAUSTED";
+      }
+
+      // 进入 Repair Mode：拒绝研究工具。
+      gateway.setRepairMode(true);
+      const repairText = buildEvidenceRepairPrompt(current, agentSessionId);
+      await this.prompt(session, repairText);
+      repairCount += 1;
+
+      if (await sink.isFrozen()) return "FROZEN";
+    }
+
+    return (await sink.isFrozen()) ? "FROZEN" : "EXHAUSTED";
+  }
+
   private fail(
     packetId: string,
-    failureCode: "EVIDENCE_NOT_SUBMITTED" | "POSITION_CANDIDATE_OBSERVATION_REQUIRED",
+    failureCode:
+      | "EVIDENCE_NOT_SUBMITTED"
+      | "POSITION_CANDIDATE_OBSERVATION_REQUIRED"
+      | "EVIDENCE_SCHEMA_REPAIR_EXHAUSTED"
+      | "EVIDENCE_REPEATED_SCHEMA_ERROR"
+      | "EVIDENCE_TOOL_NOT_CALLED",
     agentSessionId: string,
     toolCalls: EvidenceToolCallSummary[],
+    repair?: EvidenceRepairReport,
   ): InvestigatorEvidenceResult {
     // A failed packet is retained (FAILED + failureCode) for a later
     // Recovery/Retry phase; it is never deleted.
     const packet = this.deps.packetStore.updateState(packetId, "FAILED", { failureCode });
-    return { status: "FAILED", packetId, packet, failureCode, agentSessionId, toolCalls };
+    return {
+      status: "FAILED",
+      packetId,
+      packet,
+      failureCode,
+      agentSessionId,
+      toolCalls,
+      ...(repair ? { repair } : {}),
+    };
   }
 }
 
@@ -305,4 +457,29 @@ function summarizeEvidenceToolCalls(
       succeeded: eventSink.successes.some((event) => event.toolName === toolName),
     };
   });
+}
+
+/** STEP 20.1：从 Skill 加载 Canonical Evidence Contract（url-candidate-pool
+ *  + target-claim schema）。 */
+async function loadCanonicalEvidenceContract(
+  identity: SkillIdentity,
+): Promise<CanonicalEvidenceContract> {
+  const { SkillSchemaRegistry } = await import("../skill/skill-schema-registry.js");
+  const path = await import("node:path");
+  const registry = await SkillSchemaRegistry.load(path.join(identity.path, "schemas"));
+  const findSchema = (title: string, suffix: string) => {
+    const byTitle = registry.get(title);
+    if (byTitle) return byTitle;
+    const byPath = registry
+      .list()
+      .map((name) => registry.get(name))
+      .find((schema) => schema?.filePath.endsWith(suffix));
+    if (!byPath) {
+      throw new InvestigatorEvidenceRuntimeError(`Schema not found: ${title}`);
+    }
+    return byPath;
+  };
+  const pool = findSchema("URL Candidate Pool Row", "url-candidate-pool.schema.json");
+  const claim = findSchema("Target-level Evidence Claim", "target-claim.schema.json");
+  return new CanonicalEvidenceContract(pool, claim);
 }

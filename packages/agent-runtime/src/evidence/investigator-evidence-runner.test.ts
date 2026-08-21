@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ResourceLoader } from "@earendil-works/pi-coding-agent";
 import {
   MemoryToolEventSink,
+  ToolGateway,
+  createAgentToolRegistry,
+  createSubmitInvestigatorEvidenceTool,
   type InvestigationSubmissionPayload,
   type InvestigationSubmissionValidator,
   type InventorySubmissionPayload,
@@ -351,5 +354,92 @@ describe("buildEvidenceRolePrompt enum projection", () => {
     );
     expect(text).toContain("OFFICIAL_GOV_DOMAIN");
     expect(text).toContain("ACCEPTED_AS_FINAL");
+  });
+});
+
+
+describe("InvestigatorEvidenceRunner schema repair", () => {
+  it("recovers from a schema failure via repair steering then freezes", async () => {
+    const { store, packetId } = freshPacket();
+    const sink = new InMemoryInvestigatorEvidenceSubmissionSink();
+    const eventSink = new MemoryToolEventSink();
+    let firstSubmit = true;
+    const flakyValidator: InvestigatorEvidenceSubmissionValidator = {
+      validate: (payload) => {
+        if (firstSubmit) {
+          firstSubmit = false;
+          return {
+            valid: false,
+            errors: ["candidates[0]: /candidate_status must be equal to one of the allowed values"],
+            details: [
+              {
+                errorCode: "SUBMISSION_SCHEMA_VALIDATION_FAILED",
+                fieldPath: "/candidates/0/candidate_status",
+                receivedValue: "BAD_VALUE",
+                validationKeyword: "enum",
+                allowedValues: ["ACCEPTED_AS_FINAL"],
+                repairInstruction: "仅修正该字段为允许值之一。不要重新搜索。",
+              },
+            ],
+          };
+        }
+        return { valid: true };
+      },
+    };
+    const runner = new InvestigatorEvidenceRunner({
+      skillRuntime: stubSkillRuntime,
+      packetStore: store,
+      modelPolicy: new ModelPolicy(() => ({ provider: "deepseek", model: "deepseek-v4-pro" })),
+      modelResolver: await PiModelResolver.create(),
+      sink,
+      validator: flakyValidator,
+      investigationValidator: stubInvestigationValidator,
+      eventSink,
+      createSession: async () => ({
+        session: fakeSession(async (promptText) => {
+          if (promptText.includes("submit_investigator_evidence 提交因 schema")) {
+            eventSink.successes.push(
+              successEvent("fetch_page", { requestedUrl: PRIMARY_1_URL, finalUrl: PRIMARY_1_URL }),
+            );
+            eventSink.successes.push(successEvent("inspect_page", { url: PRIMARY_1_URL }));
+            eventSink.successes.push(
+              successEvent("fetch_page", { requestedUrl: PRIMARY_2_URL, finalUrl: PRIMARY_2_URL }),
+            );
+            eventSink.successes.push(successEvent("inspect_page", { url: PRIMARY_2_URL }));
+            await sink.submit(validEvidencePayload());
+          } else {
+            const registry = createAgentToolRegistry({
+              submitInvestigatorEvidenceTool: createSubmitInvestigatorEvidenceTool({
+                validator: flakyValidator,
+                sink,
+                primaryDecisions: [
+                  { targetId: "glq-target-primary1", personId: "person-wang", personName: "王安伟", primarySlot: "PRIMARY_1" },
+                  { targetId: "glq-target-primary2", personId: "person-dong", personName: "董涵", primarySlot: "PRIMARY_2" },
+                ],
+              }),
+            });
+            const gw = new ToolGateway(registry, eventSink);
+            const evt = {
+              taskRunId: "t",
+              agentSessionId: "session-evidence-test",
+              agentRole: "INVESTIGATOR",
+              signal: new AbortController().signal,
+            } as never;
+            await gw.execute(
+              "submit_investigator_evidence",
+              { candidates: [{ candidate_id: "x" }] },
+              evt,
+            );
+          }
+        }) as never,
+        extensionsResult: {} as never,
+      }),
+    });
+    const result = await runner.run({ packetId, frozenInput: FROZEN_INPUT });
+    expect(result.status).toBe("COMPLETED");
+    if (result.status !== "COMPLETED") return;
+    expect(result.repair?.submitAttempts).toBeGreaterThanOrEqual(1);
+    expect(result.repair?.repeatedErrorBreakerTriggered).toBe(false);
+    expect(result.repair?.researchToolCallsAfterFirstSubmitFailure).toBe(0);
   });
 });
