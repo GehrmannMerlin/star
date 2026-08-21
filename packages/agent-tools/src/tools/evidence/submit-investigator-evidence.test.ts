@@ -107,7 +107,7 @@ describe("createSubmitInvestigatorEvidenceTool", () => {
     };
     await expect(runTool(validPayload(), { validator: invalid })).rejects.toThrow(ToolFailureError);
     await expect(runTool(validPayload(), { validator: invalid })).rejects.toMatchObject({
-      code: ToolFailureCode.SCHEMA_VALIDATION_FAILED,
+      code: ToolFailureCode.EVIDENCE_SCHEMA_VALIDATION_FAILED,
     });
   });
 
@@ -137,6 +137,31 @@ describe("createSubmitInvestigatorEvidenceTool", () => {
     };
     await expect(runTool(payload)).rejects.toMatchObject({
       code: ToolFailureCode.POSITION_CANDIDATE_COVERAGE_REQUIRED,
+    });
+  });
+
+
+  it("carries structured repair details when the validator reports enum issues", async () => {
+    const validator: InvestigatorEvidenceSubmissionValidator = {
+      validate: () => ({
+        valid: false,
+        errors: ["candidates[0]: /candidate_status must be equal to one of the allowed values"],
+        details: [
+          {
+            errorCode: "SUBMISSION_SCHEMA_VALIDATION_FAILED",
+            fieldPath: "/candidates/0/candidate_status",
+            receivedValue: "DEFINITELY_ACCEPTED",
+            validationKeyword: "enum",
+            allowedValues: ["ACCEPTED_AS_FINAL", "REJECTED_NON_OFFICIAL_SOURCE"],
+            repairInstruction: "仅修正该字段为允许值之一。不要重新搜索。",
+          },
+        ],
+      }),
+    };
+    await expect(runTool(validPayload(), { validator })).rejects.toMatchObject({
+      code: ToolFailureCode.EVIDENCE_SCHEMA_VALIDATION_FAILED,
+      message: expect.stringContaining("允许值"),
+      details: expect.any(Array),
     });
   });
 });
