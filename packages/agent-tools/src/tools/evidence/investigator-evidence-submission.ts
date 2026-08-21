@@ -1,4 +1,5 @@
 import type { SubmissionValidation } from "../inventory/inventory-submission.js";
+import type { ValidationIssue } from "../investigation/investigation-submission.js";
 
 /**
  * Provider-neutral Investigator Evidence submission contracts.
@@ -78,3 +79,36 @@ export function normalizeUrlForJoin(url: string): string {
     return url.trim();
   }
 }
+
+/**
+ * STEP 20.1 — 结构化 Evidence Validation。
+ *
+ * 与 submit_investigation（STEP 19.4）一致：validator 返回结构化 details
+ * （ValidationIssue[]），tool / runner 据此生成精确 repair 反馈。
+ * 向后兼容 SubmissionValidation。
+ */
+export type StructuredEvidenceSubmissionValidation = SubmissionValidation & {
+  details?: ValidationIssue[];
+};
+
+/** 把结构化 issues 格式化为给 Agent 的单条可读消息。 */
+export function formatEvidenceValidationRepairMessage(
+  issues: ValidationIssue[],
+  toolName = "submit_investigator_evidence",
+): string {
+  if (issues.length === 0) {
+    return `${toolName} failed Skill schema validation`;
+  }
+  const parts = issues.map((issue, index) => {
+    const allowed =
+      issue.allowedValues.length > 0 ? issue.allowedValues.join(" / ") : "(无枚举约束)";
+    return [
+      `[${index + 1}] 字段：${issue.fieldPath}`,
+      `收到值：${JSON.stringify(issue.receivedValue)}`,
+      `允许值：${allowed}`,
+      `修复指令：${issue.repairInstruction}`,
+    ].join("；");
+  });
+  return `${toolName} failed Skill schema validation；${parts.join("。")}`;
+}
+

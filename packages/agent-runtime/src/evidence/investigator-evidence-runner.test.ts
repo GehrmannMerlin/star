@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ResourceLoader } from "@earendil-works/pi-coding-agent";
 import {
   MemoryToolEventSink,
+  ToolGateway,
+  createAgentToolRegistry,
+  createSubmitInvestigatorEvidenceTool,
   type InvestigationSubmissionPayload,
   type InvestigationSubmissionValidator,
   type InventorySubmissionPayload,
@@ -303,5 +306,140 @@ describe("InvestigatorEvidenceRunner", () => {
     });
     const result = await runner.run({ packetId, frozenInput: FROZEN_INPUT });
     expect(result.status).toBe("INVALID_REQUEST");
+  });
+});
+
+
+describe("buildEvidenceRolePrompt enum projection", () => {
+  it("includes source_domain_class / page_shape_class / candidate_status enums when a contract is supplied", async () => {
+    const pathMod = await import("node:path");
+    const urlMod = await import("node:url");
+    const SKILL_DIR = pathMod.resolve(
+      pathMod.dirname(urlMod.fileURLToPath(import.meta.url)),
+      "../../../../third-party/china-official-url-evidence-suite/skills/official-biography-evidence",
+    );
+    const { SkillSchemaRegistry } = await import("../skill/skill-schema-registry.js");
+    const registry = await SkillSchemaRegistry.load(pathMod.join(SKILL_DIR, "schemas"));
+    const pool = registry
+      .list()
+      .map((n) => registry.get(n))
+      .find((s) => s?.filePath.endsWith("url-candidate-pool.schema.json"));
+    const claim = registry
+      .list()
+      .map((n) => registry.get(n))
+      .find((s) => s?.filePath.endsWith("target-claim.schema.json"));
+    if (!pool || !claim) throw new Error("schemas missing");
+    const { CanonicalEvidenceContract } = await import("./canonical-evidence-contract.js");
+    const { buildEvidenceRolePrompt } = await import("./evidence-role-prompt.js");
+    const contract = new CanonicalEvidenceContract(pool, claim);
+    const text = buildEvidenceRolePrompt(
+      {
+        packetId: "p1",
+        institutionName: "鼓楼区人民政府",
+        regionCode: "320106",
+        institutionId: "glq",
+        administrativeLevel: "COUNTY",
+        institutionType: "government",
+        state: "EVIDENCE_PENDING",
+        attemptNo: 1,
+      } as never,
+      {
+        regionCode: "320106",
+        agentSessionId: "s1",
+        primary1: { targetId: "t1", personId: "p1", personName: "甲", primarySlot: "PRIMARY_1" },
+        primary2: { targetId: "t2", personId: "p2", personName: "乙", primarySlot: "PRIMARY_2" },
+        institutionId: "glq",
+        contract,
+      },
+    );
+    expect(text).toContain("OFFICIAL_GOV_DOMAIN");
+    expect(text).toContain("ACCEPTED_AS_FINAL");
+  });
+});
+
+
+describe("InvestigatorEvidenceRunner schema repair", () => {
+  it("recovers from a schema failure via repair steering then freezes", async () => {
+    const { store, packetId } = freshPacket();
+    const sink = new InMemoryInvestigatorEvidenceSubmissionSink();
+    const eventSink = new MemoryToolEventSink();
+    let firstSubmit = true;
+    const flakyValidator: InvestigatorEvidenceSubmissionValidator = {
+      validate: (payload) => {
+        if (firstSubmit) {
+          firstSubmit = false;
+          return {
+            valid: false,
+            errors: ["candidates[0]: /candidate_status must be equal to one of the allowed values"],
+            details: [
+              {
+                errorCode: "SUBMISSION_SCHEMA_VALIDATION_FAILED",
+                fieldPath: "/candidates/0/candidate_status",
+                receivedValue: "BAD_VALUE",
+                validationKeyword: "enum",
+                allowedValues: ["ACCEPTED_AS_FINAL"],
+                repairInstruction: "仅修正该字段为允许值之一。不要重新搜索。",
+              },
+            ],
+          };
+        }
+        return { valid: true };
+      },
+    };
+    const runner = new InvestigatorEvidenceRunner({
+      skillRuntime: stubSkillRuntime,
+      packetStore: store,
+      modelPolicy: new ModelPolicy(() => ({ provider: "deepseek", model: "deepseek-v4-pro" })),
+      modelResolver: await PiModelResolver.create(),
+      sink,
+      validator: flakyValidator,
+      investigationValidator: stubInvestigationValidator,
+      eventSink,
+      createSession: async () => ({
+        session: fakeSession(async (promptText) => {
+          if (promptText.includes("submit_investigator_evidence 提交因 schema")) {
+            eventSink.successes.push(
+              successEvent("fetch_page", { requestedUrl: PRIMARY_1_URL, finalUrl: PRIMARY_1_URL }),
+            );
+            eventSink.successes.push(successEvent("inspect_page", { url: PRIMARY_1_URL }));
+            eventSink.successes.push(
+              successEvent("fetch_page", { requestedUrl: PRIMARY_2_URL, finalUrl: PRIMARY_2_URL }),
+            );
+            eventSink.successes.push(successEvent("inspect_page", { url: PRIMARY_2_URL }));
+            await sink.submit(validEvidencePayload());
+          } else {
+            const registry = createAgentToolRegistry({
+              submitInvestigatorEvidenceTool: createSubmitInvestigatorEvidenceTool({
+                validator: flakyValidator,
+                sink,
+                primaryDecisions: [
+                  { targetId: "glq-target-primary1", personId: "person-wang", personName: "王安伟", primarySlot: "PRIMARY_1" },
+                  { targetId: "glq-target-primary2", personId: "person-dong", personName: "董涵", primarySlot: "PRIMARY_2" },
+                ],
+              }),
+            });
+            const gw = new ToolGateway(registry, eventSink);
+            const evt = {
+              taskRunId: "t",
+              agentSessionId: "session-evidence-test",
+              agentRole: "INVESTIGATOR",
+              signal: new AbortController().signal,
+            } as never;
+            await gw.execute(
+              "submit_investigator_evidence",
+              { candidates: [{ candidate_id: "x" }] },
+              evt,
+            );
+          }
+        }) as never,
+        extensionsResult: {} as never,
+      }),
+    });
+    const result = await runner.run({ packetId, frozenInput: FROZEN_INPUT });
+    expect(result.status).toBe("COMPLETED");
+    if (result.status !== "COMPLETED") return;
+    expect(result.repair?.submitAttempts).toBeGreaterThanOrEqual(1);
+    expect(result.repair?.repeatedErrorBreakerTriggered).toBe(false);
+    expect(result.repair?.researchToolCallsAfterFirstSubmitFailure).toBe(0);
   });
 });

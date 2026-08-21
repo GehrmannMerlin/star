@@ -6,8 +6,10 @@ import type {
   InvestigatorEvidenceSubmissionPayload,
   InvestigatorEvidenceSubmissionSink,
   InvestigatorEvidenceSubmissionValidator,
+  StructuredEvidenceSubmissionValidation,
   SubmitInvestigatorEvidenceSuccess,
 } from "./investigator-evidence-submission.js";
+import { formatEvidenceValidationRepairMessage } from "./investigator-evidence-submission.js";
 
 const candidateArtifact = Type.Object({}, { additionalProperties: true });
 const claimArtifact = Type.Object({}, { additionalProperties: true });
@@ -51,12 +53,17 @@ export function createSubmitInvestigatorEvidenceTool(
         candidates: input.candidates as Record<string, unknown>[],
         ...(input.claims ? { claims: input.claims as Record<string, unknown>[] } : {}),
       };
-      const validation = deps.validator.validate(payload);
+      const validation = deps.validator.validate(payload) as StructuredEvidenceSubmissionValidation;
       if (!validation.valid) {
+        const issues = validation.details ?? [];
+        const message = issues.length > 0
+          ? formatEvidenceValidationRepairMessage(issues)
+          : `submit_investigator_evidence failed Skill schema validation: ${validation.errors.join("; ")}`;
         throw new ToolFailureError({
-          code: ToolFailureCode.SCHEMA_VALIDATION_FAILED,
-          message: `submit_investigator_evidence failed Skill schema validation: ${validation.errors.join("; ")}`,
+          code: ToolFailureCode.EVIDENCE_SCHEMA_VALIDATION_FAILED,
+          message,
           retryable: false,
+          ...(issues.length > 0 ? { details: issues } : {}),
         });
       }
 

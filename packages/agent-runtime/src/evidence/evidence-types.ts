@@ -8,10 +8,25 @@ import type { InstitutionWorkPacket } from "../work-packet/institution-work-pack
 export const EVIDENCE_NOT_SUBMITTED = "EVIDENCE_NOT_SUBMITTED" as const;
 export const POSITION_CANDIDATE_OBSERVATION_REQUIRED =
   "POSITION_CANDIDATE_OBSERVATION_REQUIRED" as const;
+export const EVIDENCE_SCHEMA_REPAIR_EXHAUSTED = "EVIDENCE_SCHEMA_REPAIR_EXHAUSTED" as const;
+export const EVIDENCE_REPEATED_SCHEMA_ERROR = "EVIDENCE_REPEATED_SCHEMA_ERROR" as const;
+export const EVIDENCE_TOOL_NOT_CALLED = "EVIDENCE_TOOL_NOT_CALLED" as const;
 
 export type EvidenceFailureCode =
   | typeof EVIDENCE_NOT_SUBMITTED
-  | typeof POSITION_CANDIDATE_OBSERVATION_REQUIRED;
+  | typeof POSITION_CANDIDATE_OBSERVATION_REQUIRED
+  | typeof EVIDENCE_SCHEMA_REPAIR_EXHAUSTED
+  | typeof EVIDENCE_REPEATED_SCHEMA_ERROR
+  | typeof EVIDENCE_TOOL_NOT_CALLED;
+
+/** STEP 20.1 — Evidence repair 指标（Completion Gate 观测）。 */
+export type EvidenceRepairReport = {
+  submitAttempts: number;
+  schemaValidationFailures: number;
+  repairAttempts: number;
+  repeatedErrorBreakerTriggered: boolean;
+  researchToolCallsAfterFirstSubmitFailure: number;
+};
 
 export type EvidenceToolCallSummary = {
   toolName: string;
@@ -64,6 +79,7 @@ export type InvestigatorEvidenceCompletedResult = {
   model: { provider: string; model: string };
   toolCalls: EvidenceToolCallSummary[];
   provenance: EvidenceProvenanceGate;
+  repair?: EvidenceRepairReport;
   receipt: InvestigatorEvidenceFreezeReceipt;
 };
 
@@ -74,6 +90,7 @@ export type InvestigatorEvidenceFailedResult = {
   failureCode: EvidenceFailureCode;
   agentSessionId: string;
   toolCalls: EvidenceToolCallSummary[];
+  repair?: EvidenceRepairReport;
 };
 
 export type InvestigatorEvidenceResult =

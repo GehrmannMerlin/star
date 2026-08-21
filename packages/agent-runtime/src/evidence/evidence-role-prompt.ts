@@ -1,5 +1,37 @@
+import type { ValidationIssue } from "@stellaris/agent-tools";
 import type { EvidencePrimaryDecision } from "@stellaris/agent-tools";
 import type { InstitutionWorkPacket } from "../work-packet/institution-work-packet.js";
+import type { CanonicalEvidenceContract } from "./canonical-evidence-contract.js";
+
+export type EvidencePromptOptions = {
+  regionCode: string;
+  agentSessionId: string;
+  primary1: EvidencePrimaryDecision;
+  primary2: EvidencePrimaryDecision;
+  institutionId: string;
+  /** STEP 20.1：Canonical Evidence Contract（enum 唯一真相源，动态投影）。 */
+  contract?: CanonicalEvidenceContract;
+};
+
+/**
+ * 从 Canonical Evidence Contract 动态投影枚举约束。
+ *
+ * 绝不硬编码 enum 副本；这里只把 schema 的真实 allowed values 原样写给模型。
+ * 没有 contract 时不输出枚举（保持向后兼容的字段名提示），由 validator 兜底。
+ */
+function renderEvidenceEnumContract(
+  contract: CanonicalEvidenceContract | undefined,
+): string[] {
+  if (!contract) return [];
+  const lines: string[] = [];
+  for (const entry of contract.enumFields()) {
+    if (entry.allowedValues.length === 0) continue;
+    lines.push(
+      `- ${entry.field} 必须严格从以下值中选择（禁止翻译、禁止缩写、禁止创建新枚举值）：${entry.allowedValues.join(" / ")}`,
+    );
+  }
+  return lines;
+}
 
 /**
  * Short Investigator Evidence role prompt. Leadership / PRIMARY are frozen
@@ -8,13 +40,7 @@ import type { InstitutionWorkPacket } from "../work-packet/institution-work-pack
  */
 export function buildEvidenceRolePrompt(
   packet: InstitutionWorkPacket,
-  opts: {
-    regionCode: string;
-    agentSessionId: string;
-    primary1: EvidencePrimaryDecision;
-    primary2: EvidencePrimaryDecision;
-    institutionId: string;
-  },
+  opts: EvidencePromptOptions,
 ): string {
   const lines = [
     "你正在执行 Stellaris 政务简历采集的 Investigator Agent 任务，当前阶段：Position Evidence（当前岗位信息 URL 候选）。",
@@ -44,5 +70,63 @@ export function buildEvidenceRolePrompt(
     "不要读取文件，不要执行 shell，不要使用聊天文本代替正式提交。",
     `investigator_agent_id / investigator_context_id 使用：${opts.agentSessionId}。`,
   ];
+
+  const enumLines = renderEvidenceEnumContract(opts.contract);
+  if (enumLines.length > 0) {
+    lines.push("", "URL Candidate Pool 枚举约束（来自 canonical Skill schema）：");
+    lines.push(...enumLines);
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * STEP 20.1 — Evidence Finalize steering。
+ *
+ * 证据 prompt 结束后 Agent 未提交：给一次短 steering，指示用
+ * submit_investigator_evidence 提交。不重新发送长 Skill。
+ */
+export function buildEvidenceFinalizePrompt(
+  packet: InstitutionWorkPacket,
+  opts: EvidencePromptOptions,
+): string {
+  const lines = [
+    "证据采集已完成。不要继续搜索。",
+    `请使用 submit_investigator_evidence 提交 ${packet.institutionName} 的 URL Candidate Pool（candidates 覆盖 PRIMARY_1 与 PRIMARY_2）。`,
+    `investigator_agent_id / investigator_context_id 使用：${opts.agentSessionId}。`,
+  ];
+  const enumLines = renderEvidenceEnumContract(opts.contract);
+  if (enumLines.length > 0) {
+    lines.push("", "URL Candidate Pool 枚举约束（来自 canonical Skill schema）：");
+    lines.push(...enumLines);
+  }
+  lines.push("", "提交成功后结束任务。不要继续调查。");
+  return lines.join("\n");
+}
+
+/**
+ * STEP 20.1 — Evidence Repair steering。
+ *
+ * submit_investigator_evidence 因 schema 失败被拒后，把结构化 issue（fieldPath /
+ * receivedValue / allowedValues）反馈给 Agent，指示仅修正这些字段后重试。
+ * 不重新发送长 Skill，不包含完整 payload。
+ */
+export function buildEvidenceRepairPrompt(
+  issues: ValidationIssue[],
+  agentSessionId: string,
+): string {
+  const lines = [
+    "证据采集已完成，submit_investigator_evidence 提交因 schema 校验失败被拒绝。",
+    "请仅修正以下字段后再次调用 submit_investigator_evidence。不要重新搜索。不要修改已验证证据。不要创建新的枚举值。",
+  ];
+  issues.forEach((issue, index) => {
+    const allowed =
+      issue.allowedValues.length > 0 ? issue.allowedValues.join(" / ") : "(无枚举约束)";
+    lines.push(
+      `- [${index + 1}] 字段 ${issue.fieldPath}：收到值 ${JSON.stringify(issue.receivedValue)}；允许值 ${allowed}`,
+    );
+  });
+  lines.push(`使用 agent id：${agentSessionId}。`);
+  lines.push("提交成功后结束任务，不要继续调查。");
   return lines.join("\n");
 }
