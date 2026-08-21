@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { SkillIdentity } from "../skill/skill-identity.js";
 import { createSkillEvidenceValidator } from "./skill-evidence-validator.js";
+import { CanonicalEvidenceContract } from "./canonical-evidence-contract.js";
 
 // The test lives at packages/agent-runtime/src/evidence/; the repo root is 4
 // levels up. Resolve the pinned Skill's real schemas so the validator runs
@@ -74,3 +75,52 @@ describe("createSkillEvidenceValidator", () => {
     expect(result.valid).toBe(false);
   });
 });
+
+describe("CanonicalEvidenceContract", () => {
+  it("projects source_domain_class / page_shape_class / candidate_status enums from the canonical schemas", async () => {
+    const { SkillSchemaRegistry } = await import("../skill/skill-schema-registry.js");
+    const registry = await SkillSchemaRegistry.load(path.join(SKILL_DIR, "schemas"));
+    const poolSchema =
+      registry.get("URL Candidate Pool Row") ??
+      registry
+        .list()
+        .map((n) => registry.get(n))
+        .find((s) => s?.filePath.endsWith("url-candidate-pool.schema.json"));
+    const claimSchema =
+      registry.get("Target-level Evidence Claim") ??
+      registry
+        .list()
+        .map((n) => registry.get(n))
+        .find((s) => s?.filePath.endsWith("target-claim.schema.json"));
+    if (!poolSchema || !claimSchema) throw new Error("schemas not found");
+    const contract = new CanonicalEvidenceContract(poolSchema, claimSchema);
+    const enums = contract.enumFields();
+    expect(enums.map((e) => e.field)).toEqual(
+      expect.arrayContaining(["source_domain_class", "page_shape_class", "candidate_status"]),
+    );
+    expect(contract.fieldAllowedValues("source_domain_class")).toContain("OFFICIAL_GOV_DOMAIN");
+    expect(contract.fieldAllowedValues("page_shape_class")).toContain("OFFICIAL_PERSON_PROFILE");
+    expect(contract.fieldAllowedValues("candidate_status")).toContain("ACCEPTED_AS_FINAL");
+  });
+});
+
+describe("createSkillEvidenceValidator structured details", () => {
+  it("returns structured details with allowedValues for enum violations", async () => {
+    const validator = await createSkillEvidenceValidator(identity);
+    const bad = { ...VALID_CANDIDATE, candidate_status: "DEFINITELY_ACCEPTED" };
+    const result = validator.validate({ candidates: [bad] });
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      const details = (result as { details?: unknown[] }).details ?? [];
+      expect(details.length).toBeGreaterThan(0);
+      const enumDetail = details.find((d) =>
+        (d as { fieldPath?: string }).fieldPath?.includes("candidate_status"),
+      );
+      expect(enumDetail).toBeDefined();
+      expect((enumDetail as { allowedValues?: readonly string[] }).allowedValues).toContain(
+        "ACCEPTED_AS_FINAL",
+      );
+    }
+  });
+});
+
